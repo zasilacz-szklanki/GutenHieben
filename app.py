@@ -5,15 +5,6 @@ from flask import (Flask, redirect, render_template, request,
 
 app = Flask(__name__)
 
-app.secret_key = "super_secret_keyA"
-
-# Dane do połączenia z Azure Storage
-AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-CONTAINER_NAME = "files"
-
-blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-
 @app.route('/')
 def index():
    print('Request for index page received')
@@ -41,6 +32,13 @@ def logout():
 
 @app.route('/upload', methods=['POST'])
 def upload():
+    # Dane do połączenia z Azure Storage
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+
+    blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+    
     if 'file' not in request.files:
         return redirect(url_for('index'))
 
