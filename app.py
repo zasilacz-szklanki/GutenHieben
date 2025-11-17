@@ -26,6 +26,10 @@ def hello():
        print('Request for hello page received with no name or blank name -- redirecting')
        return redirect(url_for('index'))
 
+@app.route('/test', methods=['GET'])
+def test():
+    return "To jest test metody GET"
+
 @app.route('/logout')
 def logout():
     return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
