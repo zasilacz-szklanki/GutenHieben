@@ -1,5 +1,4 @@
 import os
-# from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
                    send_from_directory, url_for)
 
@@ -33,34 +32,6 @@ def test():
 @app.route('/logout')
 def logout():
     return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
-
-
-# @app.route('/upload', methods=['POST'])
-# def upload():
-#     # Dane do połączenia z Azure Storage
-#     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-#     CONTAINER_NAME = "files"
-
-#     blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-#     container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-
-#     if 'file' not in request.files:
-#         return redirect(url_for('index'))
-
-#     file = request.files['file']
-#     if file.filename == '':
-#         return redirect(url_for('index'))
-
-#     try:
-#         # Utwórz blob i prześlij plik
-#         blob_client = container_client.get_blob_client(file.filename)
-#         blob_client.upload_blob(file, overwrite=True)
-
-#         print(f"Plik {file.filename} przesłany do Azure Blob Storage")
-#         return f"Plik {file.filename} został przesłany pomyślnie!"
-#     except Exception as e:
-#         print(f"Błąd przesyłania: {e}")
-#         return "Wystąpił błąd podczas przesyłania pliku."
 
 if __name__ == '__main__':
    app.run()
