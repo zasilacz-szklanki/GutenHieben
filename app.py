@@ -5,7 +5,7 @@ from flask import (Flask, redirect, render_template, request,
 
 app = Flask(__name__)
 
-app.secret_key = "super_secret_key"
+app.secret_key = "super_secret_keyA"
 
 # Dane do połączenia z Azure Storage
 AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
