@@ -17,6 +17,11 @@
             <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg px-4 gap-3">Back home</a>
             <a href="{{ url_for('logout') }}" class="btn btn-primary btn-lg px-4 gap-3">Logout</a>
           </div>
-     </main>      
+     </main>  
+     <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+        <input type="file" name="file">
+        <button type="submit">Prześlij plik</button>
+    </form>
+      
    </body>
 </html>
