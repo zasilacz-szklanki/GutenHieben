@@ -30,6 +30,7 @@ def hello():
 def logout():
     return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
 
+
 # @app.route('/upload', methods=['POST'])
 # def upload():
 #     # Dane do połączenia z Azure Storage
