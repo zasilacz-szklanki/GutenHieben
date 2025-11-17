@@ -28,5 +28,9 @@ def hello():
        return redirect(url_for('index'))
 
 
+@app.route('/logout', methods=['POST'])
+def logout():
+    return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
+
 if __name__ == '__main__':
    app.run()
