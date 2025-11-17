@@ -1,5 +1,5 @@
 import os
-
+from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
                    send_from_directory, url_for)
 
@@ -13,8 +13,6 @@ CONTAINER_NAME = "files"
 
 blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
 container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-
-
 
 @app.route('/')
 def index():
