@@ -7,7 +7,6 @@
 <body>
     <div class="container my-4">
 
-        <!-- Sekcja komunikatów -->
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
@@ -34,10 +33,9 @@
                     <td>{{ file.name }}</td>
                     <td>{{ file.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                     <td class="d-flex gap-2">
-                        <!-- Pobieranie -->
+
                         <a href="{{ url_for('download', filename=file.name) }}" class="btn btn-sm btn-success">Pobierz</a>
 
-                        <!-- Usuwanie -->
                         <form method="post" action="{{ url_for('delete_file') }}" onsubmit="return confirm('Usunąć plik {{ file.name }}?');">
                             <input type="hidden" name="filename" value="{{ file.name }}">
                             <button type="submit" class="btn btn-sm btn-danger">Usuń</button>
@@ -57,7 +55,7 @@
             <button type="submit" class="btn btn-primary">Prześlij plik</button>
         </form>
 
-        <a href="{{ url_for('index') }}" class="btn btn-secondary btn-lg px-4 gap-3 mt-3">Back</a>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary btn-lg px-4 gap-3 mt-3">Powrót</a>
     </div>
 
     <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
