@@ -5,6 +5,8 @@ from flask import (Flask, redirect, render_template, request,
 
 app = Flask(__name__)
 
+def get_user_id():
+    return request.headers.get('X-MS-CLIENT-PRINCIPAL-ID', 'anonymous')
 @app.route('/')
 def index():
    print('Request for index page received')
@@ -50,9 +52,12 @@ def upload():
     if file.filename == '':
         return redirect(url_for('index'))
 
+    user_id = get_user_id()
+    blob_name = f"{user_id}/{file.filename}"
+
     try:
         # Utwórz blob i prześlij plik
-        blob_client = container_client.get_blob_client(file.filename)
+        blob_client = container_client.get_blob_client(blob_name)
         blob_client.upload_blob(file, overwrite=True)
 
         print(f"Plik {file.filename} przesłany do Azure Blob Storage")
