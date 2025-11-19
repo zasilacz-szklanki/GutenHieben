@@ -5,10 +5,17 @@
 </head>
 <body>
     <h1>Pliki w kontenerze</h1>
-    <ul>
+    <table border="1" cellpadding="5">
+        <tr>
+            <th>Nazwa pliku</th>
+            <th>Czas przesłania</th>
+        </tr>
         {% for file in files %}
-            <li><a href="{{ url_for('download', filename=file) }}">{{ file }}</a></li>
+        <tr>
+            <td><a href="{{ url_for('download', filename=file.name) }}">{{ file.name }}</a></td>
+            <td>{{ file.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        </tr>
         {% endfor %}
-    </ul>
+    </table>
 </body>
 </html>

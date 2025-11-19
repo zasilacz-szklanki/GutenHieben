@@ -68,7 +68,6 @@ def upload():
 
 @app.route('/files')
 def files():
-    # Dane do połączenia z Azure Storage
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
 
@@ -80,15 +79,20 @@ def files():
 
         # Pobierz listę blobów
         blob_list = container_client.list_blobs(name_starts_with=prefix)
-        # files = [blob.name for blob in blob_list]
 
-        files = [blob.name[len(prefix):] for blob in blob_list]
+        files = []
+        for blob in blob_list:
+            files.append({
+                "name": blob.name[len(prefix):],       # nazwa bez prefiksu
+                "last_modified": blob.last_modified    # czas przesłania
+            })
 
         print("Lista plików:", files)
         return render_template('files.html', files=files)
     except Exception as e:
         print(f"Błąd pobierania listy plików: {e}")
         return "Wystąpił błąd podczas pobierania listy plików."
+
 
 @app.route('/download/<filename>')
 def download(filename):
