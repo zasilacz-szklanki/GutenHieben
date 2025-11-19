@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
@@ -8,26 +10,30 @@ app = Flask(__name__)
 def get_user_id():
     return request.headers.get('X-MS-CLIENT-PRINCIPAL-ID', 'anonymous')
 
+def get_user_info():
+    principal_header = request.headers.get('X-MS-CLIENT-PRINCIPAL')
+    if not principal_header:
+        return {"name": "anonymous", "provider": None}
+
+    decoded = base64.b64decode(principal_header)
+    principal_data = json.loads(decoded)
+
+    return {
+        "name": principal_data.get("name", "anonymous"),
+        "email": principal_data.get("userDetails"),
+        "provider": principal_data.get("identityProvider")
+    }
+
 @app.route('/')
 def index():
    print('Request for index page received')
-   return render_template('index.html')
+   user_info = get_user_info()
+   return render_template('index.html', name = user_info["name"])
 
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
-
-@app.route('/hello', methods=['POST'])
-def hello():
-   name = request.form.get('name')
-
-   if name:
-       print('Request for hello page received with name=%s' % name)
-       return render_template('hello.html', name = name)
-   else:
-       print('Request for hello page received with no name or blank name -- redirecting')
-       return redirect(url_for('index'))
 
 @app.route('/test', methods=['GET'])
 def test():
