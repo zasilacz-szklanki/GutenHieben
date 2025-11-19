@@ -1,7 +1,7 @@
 import os
 from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
-                   send_from_directory, url_for)
+                   send_from_directory, url_for, Response)
 
 app = Flask(__name__)
 
@@ -81,7 +81,7 @@ def files():
         # Pobierz listę blobów
         blob_list = container_client.list_blobs(name_starts_with=prefix)
         # files = [blob.name for blob in blob_list]
-        
+
         files = [blob.name[len(prefix):] for blob in blob_list]
 
         print("Lista plików:", files)
@@ -89,6 +89,31 @@ def files():
     except Exception as e:
         print(f"Błąd pobierania listy plików: {e}")
         return "Wystąpił błąd podczas pobierania listy plików."
+
+@app.route('/download/<filename>')
+def download(filename):
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        user_id = get_user_id()
+        prefix = f"{user_id}/"
+        blob_name = prefix + filename
+
+        blob_client = container_client.get_blob_client(blob_name)
+        stream = blob_client.download_blob()
+
+        # Zwróć plik jako odpowiedź HTTP
+        return Response(
+            stream.readall(),
+            mimetype="application/octet-stream",
+            headers={"Content-Disposition": f"attachment;filename={filename}"}
+        )
+    except Exception as e:
+        print(f"Błąd pobierania pliku: {e}")
+        return "Wystąpił błąd podczas pobierania pliku."
 
 if __name__ == '__main__':
    app.run()

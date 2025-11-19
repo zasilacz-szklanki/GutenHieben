@@ -7,7 +7,7 @@
     <h1>Pliki w kontenerze</h1>
     <ul>
         {% for file in files %}
-            <li>{{ file }}</li>
+            <li><a href="{{ url_for('download', filename=file) }}">{{ file }}</a></li>
         {% endfor %}
     </ul>
 </body>
