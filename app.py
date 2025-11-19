@@ -43,9 +43,6 @@ def upload():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
 
-    blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-
     if 'file' not in request.files:
         return redirect(url_for('index'))
 
@@ -57,6 +54,8 @@ def upload():
     blob_name = f"{user_id}/{file.filename}"
 
     try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
         # Utwórz blob i prześlij plik
         blob_client = container_client.get_blob_client(blob_name)
         blob_client.upload_blob(file, overwrite=True)
@@ -68,18 +67,18 @@ def upload():
         return "Wystąpił błąd podczas przesyłania pliku."
 
 @app.route('/files')
-def list_files():
-    # TODO wyświetlenie plików uzytkownika
+def files():
     # Dane do połączenia z Azure Storage
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
 
-    blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-
     try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        prefix = f"{user_id}/"
+
         # Pobierz listę blobów
-        blob_list = container_client.list_blobs()
+        blob_list = container_client.list_blobs(name_starts_with=prefix)
         files = [blob.name for blob in blob_list]
 
         print("Lista plików:", files)
