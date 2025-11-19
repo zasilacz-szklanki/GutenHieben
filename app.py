@@ -18,8 +18,10 @@ def get_user_info():
     decoded = base64.b64decode(principal_header)
     principal_data = json.loads(decoded)
 
+    print(principal_data)
+
     return {
-        "name": principal_data.get("name", "anonymous"),
+        "name": principal_data.get("name"),
         "email": principal_data.get("userDetails"),
         "provider": principal_data.get("identityProvider")
     }
