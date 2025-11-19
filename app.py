@@ -13,16 +13,43 @@ def get_user_id():
 def get_user_info():
     principal_header = request.headers.get('X-MS-CLIENT-PRINCIPAL')
     if not principal_header:
-        return {"name": "anonymous", "provider": None}
+        return {"name": "anonymous", "email": None, "provider": None}
 
-    decoded = base64.b64decode(principal_header)
-    principal_data = json.loads(decoded)
-    
-    return {
-        "name": principal_data.get("userDetails", principal_data.get("name", "anonymous")),
-        "email": principal_data.get("userDetails"),
-        "provider": principal_data.get("identityProvider")
-    }
+    try:
+        decoded = base64.b64decode(principal_header)
+        principal = json.loads(decoded)
+    except Exception:
+        # W razie problemów z dekodowaniem zwróć wartości domyślne
+        return {"name": "anonymous", "email": None, "provider": None}
+
+    # claims to lista słowników: [{"typ": "...", "val": "..."} , ...]
+    claims = principal.get("claims", [])
+    claim_map = {c.get("typ"): c.get("val") for c in claims if "typ" in c and "val" in c}
+
+    # Priorytet wyznaczenia czytelnej nazwy
+    name = (
+        claim_map.get("name") or
+        (
+            (claim_map.get("given_name") and claim_map.get("family_name")) and
+            f"{claim_map.get('given_name')} {claim_map.get('family_name')}"
+        ) or
+        claim_map.get("preferred_username") or
+        claim_map.get("nickname") or
+        principal.get("name") or
+        principal.get("userDetails") or
+        "anonymous"
+    )
+
+    # E-mail/identyfikator użytkownika (różnie w zależności od IdP)
+    email = (
+        claim_map.get("email") or
+        claim_map.get("emails") or
+        principal.get("userDetails")
+    )
+
+    provider = principal.get("identityProvider")
+
+    return {"name": name, "email": email, "provider": provider}
 
 @app.route('/')
 def index():
