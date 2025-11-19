@@ -69,6 +69,7 @@ def upload():
 
 @app.route('/files')
 def list_files():
+    # TODO wyświetlenie plików uzytkownika
     # Dane do połączenia z Azure Storage
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
