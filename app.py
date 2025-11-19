@@ -75,7 +75,7 @@ def files():
     try:
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-        prefix = f"{user_id}/"
+        prefix = f"{get_user_id()}/"
 
         # Pobierz listę blobów
         blob_list = container_client.list_blobs(name_starts_with=prefix)
