@@ -6,7 +6,7 @@ from flask import (Flask, redirect, render_template, request,
                    send_from_directory, url_for, Response, flash)
 
 app = Flask(__name__)
-app.secret_key = "twoj-sekret-klucz" 
+app.secret_key = "DTS" 
 
 def get_user_id():
     return request.headers.get('X-MS-CLIENT-PRINCIPAL-ID', 'anonymous')
@@ -90,11 +90,11 @@ def upload():
         blob_client.upload_blob(file, overwrite=True)
 
         print(f"Plik {file.filename} przesłany do Azure Blob Storage")
-        flash(f"✅ Plik {file.filename} został przesłany pomyślnie!", "success")
+        flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
         return redirect(url_for('files'))
     except Exception as e:
         print(f"Błąd przesyłania: {e}")
-        flash("❌ Wystąpił błąd podczas przesyłania pliku.", "danger")
+        flash("Wystąpił błąd podczas przesyłania pliku.", "danger")
         return redirect(url_for('index'))
 
 @app.route('/files')
@@ -147,6 +147,34 @@ def download(filename):
     except Exception as e:
         print(f"Błąd pobierania pliku: {e}")
         return "Wystąpił błąd podczas pobierania pliku."
+
+@app.route('/delete', methods=['POST'])
+def delete_file():
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+
+    filename = request.form.get('filename')
+    if not filename:
+        flash("Brak nazwy pliku do usunięcia.", "danger")
+        return redirect(url_for('files'))
+
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+
+        user_id = get_user_id()
+        prefix = f"{user_id}/"
+        blob_name = prefix + filename
+
+        blob_client = container_client.get_blob_client(blob_name)
+        blob_client.delete_blob()
+
+        flash(f"Plik {filename} został usunięty.", "success")
+    except Exception as e:
+        print(f"Błąd usuwania pliku: {e}")
+        flash(f"Nie udało się usunąć pliku {filename}.", "danger")
+
+    return redirect(url_for('files'))
 
 if __name__ == '__main__':
    app.run()
