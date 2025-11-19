@@ -6,6 +6,19 @@
 </head>
 <body>
     <div class="container my-4">
+
+        <!-- Sekcja komunikatów -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
         <h1 class="mb-4">Lista plików</h1>
         <table class="table table-striped table-bordered" cellpadding="5">
             <thead class="table-dark">
@@ -25,17 +38,19 @@
                 {% endfor %}
             </tbody>
         </table>
+
         <h2 class="mt-5 mb-3">Prześlij Nowy Plik</h2>
         <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="p-3 border rounded shadow-sm">
-
             <div class="mb-3">
                 <label for="fileUpload" class="form-label">Wybierz plik do przesłania</label>
                 <input type="file" name="file" class="form-control" id="fileUpload" required>
             </div>
-
             <button type="submit" class="btn btn-primary">Prześlij plik</button>
         </form>
+
         <a href="{{ url_for('index') }}" class="btn btn-secondary btn-lg px-4 gap-3">Back</a>
     </div>
+
+    <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@ from flask import (Flask, redirect, render_template, request,
                    send_from_directory, url_for, Response)
 
 app = Flask(__name__)
+app.secret_key = "twoj-sekret-klucz" 
 
 def get_user_id():
     return request.headers.get('X-MS-CLIENT-PRINCIPAL-ID', 'anonymous')
@@ -19,14 +20,11 @@ def get_user_info():
         decoded = base64.b64decode(principal_header)
         principal = json.loads(decoded)
     except Exception:
-        # W razie problemów z dekodowaniem zwróć wartości domyślne
         return {"name": "anonymous", "email": None, "provider": None}
 
-    # claims to lista słowników: [{"typ": "...", "val": "..."} , ...]
     claims = principal.get("claims", [])
     claim_map = {c.get("typ"): c.get("val") for c in claims if "typ" in c and "val" in c}
 
-    # Priorytet wyznaczenia czytelnej nazwy
     name = (
         claim_map.get("name") or
         (
@@ -40,7 +38,6 @@ def get_user_info():
         "anonymous"
     )
 
-    # E-mail/identyfikator użytkownika (różnie w zależności od IdP)
     email = (
         claim_map.get("email") or
         claim_map.get("emails") or
@@ -72,7 +69,6 @@ def logout():
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    # Dane do połączenia z Azure Storage
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
 
@@ -89,15 +85,17 @@ def upload():
     try:
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-        # Utwórz blob i prześlij plik
+
         blob_client = container_client.get_blob_client(blob_name)
         blob_client.upload_blob(file, overwrite=True)
 
         print(f"Plik {file.filename} przesłany do Azure Blob Storage")
-        return f"Plik {file.filename} został przesłany pomyślnie!"
+        flash(f"✅ Plik {file.filename} został przesłany pomyślnie!", "success")
+        return redirect(url_for('files'))
     except Exception as e:
         print(f"Błąd przesyłania: {e}")
-        return "Wystąpił błąd podczas przesyłania pliku."
+        flash("❌ Wystąpił błąd podczas przesyłania pliku.", "danger")
+        return redirect(url_for('index'))
 
 @app.route('/files')
 def files():
@@ -110,14 +108,13 @@ def files():
         user_id = get_user_id()
         prefix = f"{user_id}/"
 
-        # Pobierz listę blobów
         blob_list = container_client.list_blobs(name_starts_with=prefix)
 
         files = []
         for blob in blob_list:
             files.append({
-                "name": blob.name[len(prefix):],       # nazwa bez prefiksu
-                "last_modified": blob.last_modified    # czas przesłania
+                "name": blob.name[len(prefix):],
+                "last_modified": blob.last_modified
             })
 
         print("Lista plików:", files)
@@ -142,7 +139,6 @@ def download(filename):
         blob_client = container_client.get_blob_client(blob_name)
         stream = blob_client.download_blob()
 
-        # Zwróć plik jako odpowiedź HTTP
         return Response(
             stream.readall(),
             mimetype="application/octet-stream",
