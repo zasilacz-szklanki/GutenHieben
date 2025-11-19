@@ -80,7 +80,9 @@ def files():
 
         # Pobierz listę blobów
         blob_list = container_client.list_blobs(name_starts_with=prefix)
-        files = [blob.name for blob in blob_list]
+        # files = [blob.name for blob in blob_list]
+        
+        files = [blob.name[len(prefix):] for blob in blob_list]
 
         print("Lista plików:", files)
         return render_template('files.html', files=files)
