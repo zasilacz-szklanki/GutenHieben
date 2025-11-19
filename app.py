@@ -7,6 +7,7 @@ app = Flask(__name__)
 
 def get_user_id():
     return request.headers.get('X-MS-CLIENT-PRINCIPAL-ID', 'anonymous')
+
 @app.route('/')
 def index():
    print('Request for index page received')
@@ -65,6 +66,26 @@ def upload():
     except Exception as e:
         print(f"Błąd przesyłania: {e}")
         return "Wystąpił błąd podczas przesyłania pliku."
+
+@app.route('/files')
+def list_files():
+    # Dane do połączenia z Azure Storage
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+
+    blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+
+    try:
+        # Pobierz listę blobów
+        blob_list = container_client.list_blobs()
+        files = [blob.name for blob in blob_list]
+
+        print("Lista plików:", files)
+        return render_template('files.html', files=files)
+    except Exception as e:
+        print(f"Błąd pobierania listy plików: {e}")
+        return "Wystąpił błąd podczas pobierania listy plików."
 
 if __name__ == '__main__':
    app.run()
