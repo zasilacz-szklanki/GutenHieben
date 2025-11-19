@@ -16,6 +16,7 @@
             <td>{{ file.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}</td>
         </tr>
         {% endfor %}
+        <a href="{{ url_for('hello') }}" class="btn btn-primary btn-lg px-4 gap-3">Back</a>
     </table>
 </body>
 </html>
