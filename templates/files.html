@@ -87,7 +87,12 @@
                             </form>
                             {% endif %}
 
-                            {% if file.size < 5 * 1024 * 1024 and (file.name.endswith('.txt') or
+                            {% if file.has_description %}
+                            <form method="post" action="{{ url_for('view_description') }}">
+                                <input type="hidden" name="filename" value="{{ file.name }}">
+                                <button type="submit" class="btn btn-sm btn-success">Zobacz opis</button>
+                            </form>
+                            {% elif file.size < 5 * 1024 * 1024 and (file.name.endswith('.txt') or
                                 file.name.endswith('.md') or file.name.endswith('.py') or file.name.endswith('.js') or
                                 file.name.endswith('.html') or file.name.endswith('.css') or file.name.endswith('.json')
                                 or file.name.endswith('.xml') or file.name.endswith('.yaml') or

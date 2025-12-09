@@ -111,18 +111,28 @@ def files():
         user_id = get_user_id()
         prefix = f"{user_id}/"
 
-        blob_list = container_client.list_blobs(name_starts_with=prefix)
+        blob_list = list(container_client.list_blobs(name_starts_with=prefix))
+        
+        description_files = set()
+        user_files = []
 
-        files = []
         for blob in blob_list:
             blob_relative_name = blob.name[len(prefix):]
             if blob_relative_name.startswith('descriptions/'):
-                continue
+                description_files.add(blob_relative_name[len('descriptions/'):])
+            else:
+                user_files.append(blob)
+
+        files = []
+        for blob in user_files:
+            blob_relative_name = blob.name[len(prefix):]
+            has_desc = f"{blob_relative_name}.txt" in description_files
             
             files.append({
                 "name": blob_relative_name,
                 "last_modified": blob.last_modified,
-                "size": blob.size
+                "size": blob.size,
+                "has_description": has_desc
             })
 
         print("Lista plików:", files)
@@ -331,6 +341,34 @@ def describe_file():
     except Exception as e:
         print(f"Błąd generowania opisu: {e}")
         flash(f"Wystąpił błąd podczas generowania opisu: {e}", "danger")
+
+    return redirect(url_for('files'))
+
+@app.route('/view_description', methods=['POST'])
+def view_description():
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+
+    filename = request.form.get('filename')
+    if not filename:
+        return redirect(url_for('files'))
+    
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        user_id = get_user_id()
+        # Note: Description filenames have .txt appended
+        desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
+        
+        blob_client = container_client.get_blob_client(desc_blob_name)
+        stream = blob_client.download_blob()
+        description = stream.readall().decode('utf-8')
+        
+        flash(description, "description_result")
+
+    except Exception as e:
+        print(f"Błąd pobierania opisu: {e}")
+        flash(f"Nie udało się pobrać opisu: {e}", "danger")
 
     return redirect(url_for('files'))
 
