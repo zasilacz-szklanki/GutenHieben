@@ -12,10 +12,33 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         {% for category, message in messages %}
+        {% if category == 'description_result' %}
+        <!-- Modal for Description -->
+        <div class="modal fade show" id="descriptionModal" tabindex="-1"
+            style="display: block; background: rgba(0,0,0,0.5);" aria-modal="true" role="dialog">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Wygenerowany opis</h5>
+                        <button type="button" class="btn-close"
+                            onclick="document.getElementById('descriptionModal').style.display='none'"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>{{ message }}</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary"
+                            onclick="document.getElementById('descriptionModal').style.display='none'">Zamknij</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
         <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
             {{ message }}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
+        {% endif %}
         {% endfor %}
         {% endif %}
         {% endwith %}
@@ -31,6 +54,7 @@
                     <tr>
                         <th style="width: 40px;"><input type="checkbox" id="selectAll"></th>
                         <th>Nazwa pliku</th>
+                        <th>Rozmiar</th>
                         <th>Czas przesłania</th>
                         <th>Akcja</th>
                     </tr>
@@ -43,6 +67,7 @@
                                 form="bulkDeleteForm">
                         </td>
                         <td>{{ file.name }}</td>
+                        <td>{{ (file.size / 1024)|round(1) }} KB</td>
                         <td>{{ file.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                         <td class="d-flex gap-2">
 
@@ -61,11 +86,18 @@
                                 <button type="submit" class="btn btn-sm btn-warning">Rozpakuj</button>
                             </form>
                             {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+
+                            {% if file.size < 5 * 1024 * 1024 %} <form method="post"
+                                action="{{ url_for('describe_file') }}">
+                                <input type="hidden" name="filename" value="{{ file.name }}">
+                                <button type="submit" class="btn btn-sm btn-info text-white">Generuj opis</button>
+        </form>
+        {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+        </table>
         </form>
 
         <h2 class="mt-5 mb-3">Prześlij Nowy Plik</h2>

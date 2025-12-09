@@ -2,6 +2,7 @@ import base64
 import json
 import os
 import zipfile
+import groq
 from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
                    send_from_directory, url_for, Response, flash)
@@ -116,7 +117,8 @@ def files():
         for blob in blob_list:
             files.append({
                 "name": blob.name[len(prefix):],
-                "last_modified": blob.last_modified
+                "last_modified": blob.last_modified,
+                "size": blob.size
             })
 
         print("Lista plików:", files)
@@ -256,6 +258,65 @@ def unpack_file():
     except Exception as e:
         print(f"Błąd rozpakowywania: {e}")
         flash(f"Nie udało się rozpakować pliku: {e}", "danger")
+
+    return redirect(url_for('files'))
+
+@app.route('/describe', methods=['POST'])
+def describe_file():
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+    if not GROQ_API_KEY:
+        flash("Brak klucza API GROQ. Skontaktuj się z administratorem.", "warning")
+        return redirect(url_for('files'))
+
+    filename = request.form.get('filename')
+    if not filename:
+        return redirect(url_for('files'))
+
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        user_id = get_user_id()
+        blob_name = f"{user_id}/{filename}"
+        blob_client = container_client.get_blob_client(blob_name)
+
+        props = blob_client.get_blob_properties()
+        if props.size > 5 * 1024 * 1024:
+            flash(f"Plik {filename} jest zbyt duży (>5MB) do wygenerowania opisu.", "warning")
+            return redirect(url_for('files'))
+
+        download_stream = blob_client.download_blob()
+        content_bytes = download_stream.readall()
+        
+        try:
+            content_text = content_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+             flash("Tylko pliki tekstowe są obsługiwane.", "warning")
+             return redirect(url_for('files'))
+        
+        client = groq.Groq(api_key=GROQ_API_KEY)
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Stwórz krótkie, jednozdaniowe podsumowanie zawartości tego pliku:\n\n{content_text[:20000]}", 
+                }
+            ],
+            model="llama3-70b-8192",
+        )
+        
+        description = chat_completion.choices[0].message.content
+        
+        # We need to pass this description back to the template.
+        # Since we redirect, we use flash, but distinct category or special handling in template?
+        # Let's use a special flash category 'description'.
+        flash(description, "description_result") # Use specific category for modal popup in UI
+        
+    except Exception as e:
+        print(f"Błąd generowania opisu: {e}")
+        flash(f"Wystąpił błąd podczas generowania opisu: {e}", "danger")
 
     return redirect(url_for('files'))
 
