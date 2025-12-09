@@ -55,7 +55,8 @@
                         <th style="width: 40px;"><input type="checkbox" id="selectAll"></th>
                         <th>Nazwa pliku</th>
                         <th>Rozmiar</th>
-                        <th>Czas przesłania</th>
+                        <th>Utworzono</th>
+                        <th>Zmodyfikowano</th>
                         <th>Akcja</th>
                     </tr>
                 </thead>
@@ -68,6 +69,7 @@
                         </td>
                         <td>{{ file.name }}</td>
                         <td>{{ (file.size / 1024)|round(1) }} KB</td>
+                        <td>{{ file.created_on.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                         <td>{{ file.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                         <td class="d-flex gap-2">
 

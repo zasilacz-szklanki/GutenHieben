@@ -130,6 +130,7 @@ def files():
             
             files.append({
                 "name": blob_relative_name,
+                "created_on": blob.creation_time,
                 "last_modified": blob.last_modified,
                 "size": blob.size,
                 "has_description": has_desc
