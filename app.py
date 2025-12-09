@@ -178,6 +178,46 @@ def delete_file():
 
     return redirect(url_for('files'))
 
+@app.route('/delete_multiple', methods=['POST'])
+def delete_multiple():
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+
+    filenames = request.form.getlist('filenames')
+    if not filenames:
+        flash("Nie wybrano żadnych plików do usunięcia.", "warning")
+        return redirect(url_for('files'))
+
+    success_count = 0
+    fail_count = 0
+
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        user_id = get_user_id()
+        prefix = f"{user_id}/"
+
+        for filename in filenames:
+            try:
+                blob_name = prefix + filename
+                blob_client = container_client.get_blob_client(blob_name)
+                blob_client.delete_blob()
+                success_count += 1
+            except Exception as e:
+                print(f"Błąd usuwania pliku {filename}: {e}")
+                fail_count += 1
+
+        if success_count > 0:
+            flash(f"Pomyślnie usunięto {success_count} plików.", "success")
+        if fail_count > 0:
+            flash(f"Nie udało się usunąć {fail_count} plików.", "danger")
+
+    except Exception as e:
+        print(f"Błąd połączenia z Azure: {e}")
+        flash("Wystąpił błąd podczas usuwania plików.", "danger")
+    
+    return redirect(url_for('files'))
+
 @app.route('/unpack', methods=['POST'])
 def unpack_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")

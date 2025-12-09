@@ -21,41 +21,52 @@
         {% endwith %}
 
         <h1 class="mb-4">Lista plików</h1>
-        <table class="table table-striped table-bordered" cellpadding="5">
-            <thead class="table-dark">
-                <tr>
-                    <th>Nazwa pliku</th>
-                    <th>Czas przesłania</th>
-                    <th>Akcja</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for file in files %}
-                <tr>
-                    <td>{{ file.name }}</td>
-                    <td>{{ file.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                    <td class="d-flex gap-2">
+        <form method="post" action="{{ url_for('delete_multiple') }}" id="bulkDeleteForm"
+            onsubmit="return confirm('Czy na pewno chcesz usunąć zaznaczone pliki?');">
+            <div class="mb-3">
+                <button type="submit" class="btn btn-danger" id="bulkDeleteBtn" disabled>Usuń zaznaczone</button>
+            </div>
+            <table class="table table-striped table-bordered" cellpadding="5">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 40px;"><input type="checkbox" id="selectAll"></th>
+                        <th>Nazwa pliku</th>
+                        <th>Czas przesłania</th>
+                        <th>Akcja</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for file in files %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" name="filenames" value="{{ file.name }}" class="file-checkbox"
+                                form="bulkDeleteForm">
+                        </td>
+                        <td>{{ file.name }}</td>
+                        <td>{{ file.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td class="d-flex gap-2">
 
-                        <a href="{{ url_for('download', filename=file.name) }}"
-                            class="btn btn-sm btn-success">Pobierz</a>
+                            <a href="{{ url_for('download', filename=file.name) }}"
+                                class="btn btn-sm btn-success">Pobierz</a>
 
-                        <form method="post" action="{{ url_for('delete_file') }}"
-                            onsubmit="return confirm('Usunąć plik {{ file.name }}?');">
-                            <input type="hidden" name="filename" value="{{ file.name }}">
-                            <button type="submit" class="btn btn-sm btn-danger">Usuń</button>
-                        </form>
+                            <form method="post" action="{{ url_for('delete_file') }}"
+                                onsubmit="return confirm('Usunąć plik {{ file.name }}?');">
+                                <input type="hidden" name="filename" value="{{ file.name }}">
+                                <button type="submit" class="btn btn-sm btn-danger">Usuń</button>
+                            </form>
 
-                        {% if file.name.lower().endswith('.zip') %}
-                        <form method="post" action="{{ url_for('unpack_file') }}">
-                            <input type="hidden" name="filename" value="{{ file.name }}">
-                            <button type="submit" class="btn btn-sm btn-warning">Rozpakuj</button>
-                        </form>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                            {% if file.name.lower().endswith('.zip') %}
+                            <form method="post" action="{{ url_for('unpack_file') }}">
+                                <input type="hidden" name="filename" value="{{ file.name }}">
+                                <button type="submit" class="btn btn-sm btn-warning">Rozpakuj</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </form>
 
         <h2 class="mt-5 mb-3">Prześlij Nowy Plik</h2>
         <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data"
@@ -72,6 +83,29 @@
     </div>
 
     <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.file-checkbox');
+            const bulkBtn = document.getElementById('bulkDeleteBtn');
+
+            function updateBtnState() {
+                const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+                bulkBtn.disabled = !anyChecked;
+            }
+
+            selectAll.addEventListener('change', function () {
+                checkboxes.forEach(cb => {
+                    cb.checked = selectAll.checked;
+                });
+                updateBtnState();
+            });
+
+            checkboxes.forEach(cb => {
+                cb.addEventListener('change', updateBtnState);
+            });
+        });
+    </script>
 </body>
 
 </html>
