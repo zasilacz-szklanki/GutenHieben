@@ -1,21 +1,23 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Pliki</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}">
 </head>
+
 <body>
     <div class="container my-4">
 
         {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-              </div>
-            {% endfor %}
-          {% endif %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
         {% endwith %}
 
         <h1 class="mb-4">Lista plików</h1>
@@ -34,12 +36,21 @@
                     <td>{{ file.last_modified.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                     <td class="d-flex gap-2">
 
-                        <a href="{{ url_for('download', filename=file.name) }}" class="btn btn-sm btn-success">Pobierz</a>
+                        <a href="{{ url_for('download', filename=file.name) }}"
+                            class="btn btn-sm btn-success">Pobierz</a>
 
-                        <form method="post" action="{{ url_for('delete_file') }}" onsubmit="return confirm('Usunąć plik {{ file.name }}?');">
+                        <form method="post" action="{{ url_for('delete_file') }}"
+                            onsubmit="return confirm('Usunąć plik {{ file.name }}?');">
                             <input type="hidden" name="filename" value="{{ file.name }}">
                             <button type="submit" class="btn btn-sm btn-danger">Usuń</button>
                         </form>
+
+                        {% if file.name.lower().endswith('.zip') %}
+                        <form method="post" action="{{ url_for('unpack_file') }}">
+                            <input type="hidden" name="filename" value="{{ file.name }}">
+                            <button type="submit" class="btn btn-sm btn-warning">Rozpakuj</button>
+                        </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -47,10 +58,11 @@
         </table>
 
         <h2 class="mt-5 mb-3">Prześlij Nowy Plik</h2>
-        <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="p-3 border rounded shadow-sm">
+        <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data"
+            class="p-3 border rounded shadow-sm">
             <div class="mb-3">
                 <label for="fileUpload" class="form-label">Wybierz plik do przesłania</label>
-                <div class="form-text mb-2">Pliki .zip zostaną automatycznie rozpakowane.</div>
+
                 <input type="file" name="file" class="form-control" id="fileUpload" required>
             </div>
             <button type="submit" class="btn btn-primary">Prześlij plik</button>
@@ -61,4 +73,5 @@
 
     <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 </body>
+
 </html>

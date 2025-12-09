@@ -81,36 +81,17 @@ def upload():
         return redirect(url_for('index'))
 
     user_id = get_user_id()
-    
+    blob_name = f"{user_id}/{file.filename}"
+
     try:
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
 
-        if file.filename.lower().endswith('.zip'):
-            try:
-                with zipfile.ZipFile(file) as z:
-                    count = 0
-                    for filename in z.namelist():
-                        if not filename.endswith('/'): # Skip directories
-                            blob_name = f"{user_id}/{filename}"
-                            blob_client = container_client.get_blob_client(blob_name)
-                            with z.open(filename) as f:
-                                blob_client.upload_blob(f, overwrite=True)
-                            count += 1
-                    
-                    print(f"Rozpakowano i przesłano {count} plików z archiwum {file.filename}")
-                    flash(f"Pomyślnie rozpakowano i przesłano {count} plików z archiwum!", "success")
-            except zipfile.BadZipFile:
-                print(f"Błąd: Niepoprawny plik ZIP: {file.filename}")
-                flash("Przesłany plik nie jest poprawnym archiwum ZIP.", "danger")
-        else:
-            blob_name = f"{user_id}/{file.filename}"
-            blob_client = container_client.get_blob_client(blob_name)
-            blob_client.upload_blob(file, overwrite=True)
+        blob_client = container_client.get_blob_client(blob_name)
+        blob_client.upload_blob(file, overwrite=True)
 
-            print(f"Plik {file.filename} przesłany do Azure Blob Storage")
-            flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
-            
+        print(f"Plik {file.filename} przesłany do Azure Blob Storage")
+        flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
         return redirect(url_for('files'))
 
     except Exception as e:
@@ -194,6 +175,47 @@ def delete_file():
     except Exception as e:
         print(f"Błąd usuwania pliku: {e}")
         flash(f"Nie udało się usunąć pliku {filename}.", "danger")
+
+    return redirect(url_for('files'))
+
+@app.route('/unpack', methods=['POST'])
+def unpack_file():
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+
+    filename = request.form.get('filename')
+    if not filename:
+        flash("Brak nazwy pliku do rozpakowania.", "danger")
+        return redirect(url_for('files'))
+
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        user_id = get_user_id()
+        prefix = f"{user_id}/"
+        blob_name = prefix + filename
+        
+        blob_client = container_client.get_blob_client(blob_name)
+        download_stream = blob_client.download_blob()
+        
+        import io
+        file_content = io.BytesIO(download_stream.readall())
+        
+        with zipfile.ZipFile(file_content) as z:
+            count = 0
+            for inner_filename in z.namelist():
+                if not inner_filename.endswith('/'):
+                    target_blob_name = f"{user_id}/{inner_filename}"
+                    target_blob_client = container_client.get_blob_client(target_blob_name)
+                    with z.open(inner_filename) as f:
+                        target_blob_client.upload_blob(f, overwrite=True)
+                    count += 1
+        
+        flash(f"Pomyślnie rozpakowano {count} plików z archiwum {filename}!", "success")
+
+    except Exception as e:
+        print(f"Błąd rozpakowywania: {e}")
+        flash(f"Nie udało się rozpakować pliku: {e}", "danger")
 
     return redirect(url_for('files'))
 
