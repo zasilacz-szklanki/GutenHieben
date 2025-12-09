@@ -187,6 +187,14 @@ def delete_file():
 
         blob_client = container_client.get_blob_client(blob_name)
         blob_client.delete_blob()
+        
+        # Try to delete associated description
+        try:
+            desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
+            desc_blob_client = container_client.get_blob_client(desc_blob_name)
+            desc_blob_client.delete_blob()
+        except:
+            pass # Ignore if description doesn't exist
 
         flash(f"Plik {filename} został usunięty.", "success")
     except Exception as e:
@@ -219,6 +227,15 @@ def delete_multiple():
                 blob_name = prefix + filename
                 blob_client = container_client.get_blob_client(blob_name)
                 blob_client.delete_blob()
+                
+                # Try to delete associated description
+                try:
+                    desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
+                    desc_blob_client = container_client.get_blob_client(desc_blob_name)
+                    desc_blob_client.delete_blob()
+                except:
+                    pass
+
                 success_count += 1
             except Exception as e:
                 print(f"Błąd usuwania pliku {filename}: {e}")
