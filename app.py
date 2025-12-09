@@ -115,8 +115,12 @@ def files():
 
         files = []
         for blob in blob_list:
+            blob_relative_name = blob.name[len(prefix):]
+            if blob_relative_name.startswith('descriptions/'):
+                continue
+            
             files.append({
-                "name": blob.name[len(prefix):],
+                "name": blob_relative_name,
                 "last_modified": blob.last_modified,
                 "size": blob.size
             })
@@ -308,6 +312,16 @@ def describe_file():
         )
         
         description = chat_completion.choices[0].message.content
+        
+        # Save description to subfolder
+        try:
+            desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
+            desc_blob_client = container_client.get_blob_client(desc_blob_name)
+            desc_blob_client.upload_blob(description, overwrite=True)
+            print(f"Zapisano opis dla {filename}")
+        except Exception as upload_e:
+            print(f"Błąd zapisu opisu: {upload_e}")
+            # Non-critical error, continue to show it to user
         
         # We need to pass this description back to the template.
         # Since we redirect, we use flash, but distinct category or special handling in template?
