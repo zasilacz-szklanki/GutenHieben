@@ -50,6 +50,7 @@
         <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="p-3 border rounded shadow-sm">
             <div class="mb-3">
                 <label for="fileUpload" class="form-label">Wybierz plik do przesłania</label>
+                <div class="form-text mb-2">Pliki .zip zostaną automatycznie rozpakowane.</div>
                 <input type="file" name="file" class="form-control" id="fileUpload" required>
             </div>
             <button type="submit" class="btn btn-primary">Prześlij plik</button>

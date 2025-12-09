@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import zipfile
 from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
                    send_from_directory, url_for, Response, flash)
@@ -80,18 +81,38 @@ def upload():
         return redirect(url_for('index'))
 
     user_id = get_user_id()
-    blob_name = f"{user_id}/{file.filename}"
-
+    
     try:
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
 
-        blob_client = container_client.get_blob_client(blob_name)
-        blob_client.upload_blob(file, overwrite=True)
+        if file.filename.lower().endswith('.zip'):
+            try:
+                with zipfile.ZipFile(file) as z:
+                    count = 0
+                    for filename in z.namelist():
+                        if not filename.endswith('/'): # Skip directories
+                            blob_name = f"{user_id}/{filename}"
+                            blob_client = container_client.get_blob_client(blob_name)
+                            with z.open(filename) as f:
+                                blob_client.upload_blob(f, overwrite=True)
+                            count += 1
+                    
+                    print(f"Rozpakowano i przesłano {count} plików z archiwum {file.filename}")
+                    flash(f"Pomyślnie rozpakowano i przesłano {count} plików z archiwum!", "success")
+            except zipfile.BadZipFile:
+                print(f"Błąd: Niepoprawny plik ZIP: {file.filename}")
+                flash("Przesłany plik nie jest poprawnym archiwum ZIP.", "danger")
+        else:
+            blob_name = f"{user_id}/{file.filename}"
+            blob_client = container_client.get_blob_client(blob_name)
+            blob_client.upload_blob(file, overwrite=True)
 
-        print(f"Plik {file.filename} przesłany do Azure Blob Storage")
-        flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
+            print(f"Plik {file.filename} przesłany do Azure Blob Storage")
+            flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
+            
         return redirect(url_for('files'))
+
     except Exception as e:
         print(f"Błąd przesyłania: {e}")
         flash("Wystąpił błąd podczas przesyłania pliku.", "danger")
