@@ -304,7 +304,7 @@ def describe_file():
                     "content": f"Stwórz krótkie, jednozdaniowe podsumowanie zawartości tego pliku:\n\n{content_text[:20000]}", 
                 }
             ],
-            model="llama3-70b-8192",
+            model="llama-3.3-70b-versatile",
         )
         
         description = chat_completion.choices[0].message.content

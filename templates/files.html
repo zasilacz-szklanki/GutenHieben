@@ -87,7 +87,11 @@
                             </form>
                             {% endif %}
 
-                            {% if file.size < 5 * 1024 * 1024 %} <form method="post"
+                            {% if file.size < 5 * 1024 * 1024 and (file.name.endswith('.txt') or
+                                file.name.endswith('.md') or file.name.endswith('.py') or file.name.endswith('.js') or
+                                file.name.endswith('.html') or file.name.endswith('.css') or file.name.endswith('.json')
+                                or file.name.endswith('.xml') or file.name.endswith('.yaml') or
+                                file.name.endswith('.yml')) %} <form method="post"
                                 action="{{ url_for('describe_file') }}">
                                 <input type="hidden" name="filename" value="{{ file.name }}">
                                 <button type="submit" class="btn btn-sm btn-info text-white">Generuj opis</button>
