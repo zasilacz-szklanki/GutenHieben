@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Historia Operacji</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Logbook - Historia zdarzeń</h1>
+            <div>
+                <a href="{{ url_for('files') }}" class="btn btn-primary">Moje Pliki</a>
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">Strona Główna</a>
+            </div>
+        </div>
+
+        <div class="card shadow">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th scope="col">Data</th>
+                                <th scope="col">Akcja</th>
+                                <th scope="col">Plik</th>
+                                <th scope="col">Szczegóły</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in entries %}
+                            <tr>
+                                <td class="text-nowrap">{{ entry.timestamp }}</td>
+                                <td>
+                                    {% if entry.action == 'Upload' %}
+                                        <span class="badge bg-success">Wgranie</span>
+                                    {% elif entry.action == 'Wersjonowanie' %}
+                                        <span class="badge bg-warning text-dark">Nowa Wersja</span>
+                                    {% elif entry.action == 'Usunięcie' %}
+                                        <span class="badge bg-danger">Usunięcie</span>
+                                    {% elif 'AI' in entry.action %}
+                                        <span class="badge bg-info text-dark">AI</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ entry.action }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="fw-bold">{{ entry.filename }}</td>
+                                <td class="text-muted small">{{ entry.details }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4">Brak wpisów w historii.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

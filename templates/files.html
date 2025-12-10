@@ -42,8 +42,12 @@
         {% endfor %}
         {% endif %}
         {% endwith %}
-
-        <h1 class="mb-4">Lista plików</h1>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Lista plików</h1>
+            <a href="{{ url_for('logbook_view') }}" class="btn btn-info text-white">
+                📂 Zobacz Historię (Logbook)
+            </a>
+        </div>
         <form method="post" action="{{ url_for('delete_multiple') }}" id="bulkDeleteForm"
             onsubmit="return confirm('Czy na pewno chcesz usunąć zaznaczone pliki?');">
             <div class="mb-3">

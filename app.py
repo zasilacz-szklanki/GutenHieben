@@ -3,12 +3,46 @@ import json
 import os
 import zipfile
 import groq
+from datetime import datetime
 from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
                    send_from_directory, url_for, Response, flash)
 
 app = Flask(__name__)
+LOG_FILE = 'logbook.json'
 app.secret_key = "DTS" 
+
+def add_to_logbook(action, filename, details=""):
+    """Dodaje wpis do logbooka."""
+    entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "action": action,
+        "filename": filename,
+        "details": details
+    }
+    
+    logs = []
+    if os.path.exists(LOG_FILE):
+        try:
+            with open(LOG_FILE, 'r', encoding='utf-8') as f:
+                logs = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            logs = []
+    
+    logs.insert(0, entry)
+    
+    with open(LOG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(logs, f, indent=4, ensure_ascii=False)
+
+def get_logbook_entries():
+    """Pobiera wpisy z logbooka."""
+    if os.path.exists(LOG_FILE):
+        try:
+            with open(LOG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return []
+    return []
 
 def get_user_id():
     return request.headers.get('X-MS-CLIENT-PRINCIPAL-ID', 'anonymous')
@@ -69,6 +103,10 @@ def test():
 def logout():
     return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
 
+
+
+
+
 @app.route('/upload', methods=['POST'])
 def upload():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
@@ -82,14 +120,29 @@ def upload():
         return redirect(url_for('index'))
 
     user_id = get_user_id()
-    blob_name = f"{user_id}/{file.filename}"
+    original_filename = file.filename
+    blob_name = f"{user_id}/{original_filename}"
 
     try:
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-
         blob_client = container_client.get_blob_client(blob_name)
+
+        if blob_client.exists():
+            filename_base, filename_ext = os.path.splitext(original_filename)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            new_filename = f"{filename_base}_{timestamp}{filename_ext}"
+            
+            blob_name = f"{user_id}/{new_filename}"
+            blob_client = container_client.get_blob_client(blob_name)
+            
+            add_to_logbook("Wersjonowanie", original_filename, f"Plik istniał. Zmieniono nazwę na: {new_filename}")
+            
+            file.filename = new_filename
+
         blob_client.upload_blob(file, overwrite=True)
+
+        add_to_logbook("Upload", file.filename, "Pomyślnie wgrano plik do chmury")
 
         print(f"Plik {file.filename} przesłany do Azure Blob Storage")
         flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
@@ -97,8 +150,11 @@ def upload():
 
     except Exception as e:
         print(f"Błąd przesyłania: {e}")
+        add_to_logbook("Błąd Uploadu", original_filename, str(e))
         flash("Wystąpił błąd podczas przesyłania pliku.", "danger")
         return redirect(url_for('index'))
+
+
 
 @app.route('/files')
 def files():
@@ -187,6 +243,7 @@ def delete_file():
 
         blob_client = container_client.get_blob_client(blob_name)
         blob_client.delete_blob()
+        add_to_logbook("Usunięcie", filename, "Usunięto plik z chmury")
         
         # Try to delete associated description
         try:
@@ -284,7 +341,8 @@ def unpack_file():
                     with z.open(inner_filename) as f:
                         target_blob_client.upload_blob(f, overwrite=True)
                     count += 1
-        
+
+        add_to_logbook("Rozpakowanie", filename, f"Rozpakowano archiwum ZIP ({count} plików)")
         flash(f"Pomyślnie rozpakowano {count} plików z archiwum {filename}!", "success")
 
     except Exception as e:
@@ -341,6 +399,7 @@ def describe_file():
         
         description = chat_completion.choices[0].message.content
         
+        add_to_logbook("AI Opis", filename, "Wygenerowano opis przy użyciu Groq/Llama")
         # Save description to subfolder
         try:
             desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
@@ -389,6 +448,12 @@ def view_description():
         flash(f"Nie udało się pobrać opisu: {e}", "danger")
 
     return redirect(url_for('files'))
+
+
+@app.route('/logbook')
+def logbook_view():
+    entries = get_logbook_entries()
+    return render_template('logbook.html', entries=entries)
 
 if __name__ == '__main__':
    app.run()
