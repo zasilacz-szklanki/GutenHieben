@@ -6,11 +6,45 @@ import groq
 from datetime import datetime
 from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
-                   send_from_directory, url_for, Response, flash)
+                   send_from_directory, url_for, Response, flash, abort)
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 LOG_FILE = 'logbook.json'
-app.secret_key = "DTS" 
+USERS_FILE = 'users.json'
+ADMIN_SECRET = 'Cloud2025' # Simple secret for creating admin
+
+app.secret_key = "DTS"
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+class User(UserMixin):
+    def __init__(self, id, is_admin=False):
+        self.id = id
+        self.is_admin = is_admin
+
+def load_users_data():
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_users_data(users):
+    with open(USERS_FILE, 'w') as f:
+        json.dump(users, f, indent=4)
+
+@login_manager.user_loader
+def load_user(user_id):
+    users = load_users_data()
+    if user_id in users:
+        return User(user_id, users[user_id].get('is_admin', False))
+    return None 
 
 def add_to_logbook(action, filename, details=""):
     """Dodaje wpis do logbooka."""
@@ -45,44 +79,14 @@ def get_logbook_entries():
     return []
 
 def get_user_id():
-    return request.headers.get('X-MS-CLIENT-PRINCIPAL-ID', 'anonymous')
+    if current_user.is_authenticated:
+        return current_user.id
+    return 'anonymous'
 
 def get_user_info():
-    principal_header = request.headers.get('X-MS-CLIENT-PRINCIPAL')
-    if not principal_header:
-        return {"name": "anonymous", "email": None, "provider": None}
-
-    try:
-        decoded = base64.b64decode(principal_header)
-        principal = json.loads(decoded)
-    except Exception:
-        return {"name": "anonymous", "email": None, "provider": None}
-
-    claims = principal.get("claims", [])
-    claim_map = {c.get("typ"): c.get("val") for c in claims if "typ" in c and "val" in c}
-
-    name = (
-        claim_map.get("name") or
-        (
-            (claim_map.get("given_name") and claim_map.get("family_name")) and
-            f"{claim_map.get('given_name')} {claim_map.get('family_name')}"
-        ) or
-        claim_map.get("preferred_username") or
-        claim_map.get("nickname") or
-        principal.get("name") or
-        principal.get("userDetails") or
-        "anonymous"
-    )
-
-    email = (
-        claim_map.get("email") or
-        claim_map.get("emails") or
-        principal.get("userDetails")
-    )
-
-    provider = principal.get("identityProvider")
-
-    return {"name": name, "email": email, "provider": provider}
+    if current_user.is_authenticated:
+        return {"name": current_user.id}
+    return {"name": "anonymous"}
 
 @app.route('/')
 def index():
@@ -99,15 +103,66 @@ def favicon():
 def test():
     return "To jest test metody GET"
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        users = load_users_data()
+        
+        if username in users and check_password_hash(users[username]['password'], password):
+            user = User(username, users[username].get('is_admin', False))
+            login_user(user)
+            flash('Zalogowano pomyślnie!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Nieprawidłowa nazwa użytkownika lub hasło.', 'danger')
+    
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        is_admin = request.form.get('is_admin') == '1'
+        admin_code = request.form.get('admin_code')
+        
+        users = load_users_data()
+        
+        if username in users:
+            flash('Użytkownik o takiej nazwie już istnieje.', 'warning')
+            return redirect(url_for('register'))
+            
+        if is_admin and admin_code != ADMIN_SECRET:
+             flash('Nieprawidłowy kod administratora.', 'danger')
+             return redirect(url_for('register'))
+        
+        users[username] = {
+            'password': generate_password_hash(password),
+            'is_admin': is_admin
+        }
+        save_users_data(users)
+        
+        flash('Konto utworzone pomyślnie! Możesz się zalogować.', 'success')
+        return redirect(url_for('login'))
+        
+    return render_template('register.html')
+
 @app.route('/logout')
+@login_required
 def logout():
-    return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
+    logout_user()
+    flash('Wylogowano pomyślnie.', 'info')
+    return redirect(url_for('index'))
 
 
 
 
 
 @app.route('/upload', methods=['POST'])
+@login_required
 def upload():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -157,6 +212,7 @@ def upload():
 
 
 @app.route('/files')
+@login_required
 def files():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -200,6 +256,7 @@ def files():
 
 
 @app.route('/download/<filename>')
+@login_required
 def download(filename):
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -224,6 +281,7 @@ def download(filename):
         return "Wystąpił błąd podczas pobierania pliku."
 
 @app.route('/delete', methods=['POST'])
+@login_required
 def delete_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -261,6 +319,7 @@ def delete_file():
     return redirect(url_for('files'))
 
 @app.route('/delete_multiple', methods=['POST'])
+@login_required
 def delete_multiple():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -310,6 +369,7 @@ def delete_multiple():
     return redirect(url_for('files'))
 
 @app.route('/unpack', methods=['POST'])
+@login_required
 def unpack_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -352,6 +412,7 @@ def unpack_file():
     return redirect(url_for('files'))
 
 @app.route('/describe', methods=['POST'])
+@login_required
 def describe_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -422,6 +483,7 @@ def describe_file():
     return redirect(url_for('files'))
 
 @app.route('/view_description', methods=['POST'])
+@login_required
 def view_description():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -451,7 +513,11 @@ def view_description():
 
 
 @app.route('/logbook')
+@login_required
 def logbook_view():
+    if not current_user.is_admin:
+        flash("Brak uprawnień do przeglądania logbooka.", "danger")
+        return redirect(url_for('index'))
     entries = get_logbook_entries()
     return render_template('logbook.html', entries=entries)
 
