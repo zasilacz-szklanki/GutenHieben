@@ -89,12 +89,7 @@
                                 <button type="submit" class="btn btn-sm btn-danger">Usuń</button>
                             </form>
 
-                            {% if file.name.lower().endswith('.zip') %}
-                            <form method="post" action="{{ url_for('unpack_file') }}">
-                                <input type="hidden" name="filename" value="{{ file.name }}">
-                                <button type="submit" class="btn btn-sm btn-warning">Rozpakuj</button>
-                            </form>
-                            {% endif %}
+
 
                             {% if file.has_description %}
                             <div class="d-flex gap-1">

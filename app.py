@@ -3,6 +3,8 @@ import json
 import os
 import zipfile
 import groq
+import threading
+import io
 from datetime import datetime
 from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
@@ -45,6 +47,49 @@ def load_user(user_id):
     if user_id in users:
         return User(user_id, users[user_id].get('is_admin', False))
     return None 
+
+def background_unpack(user_id, filename):
+    """Logika rozpakowywania ZIP w tle."""
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+    
+    print(f"[Async] Rozpoczynam rozpakowywanie: {filename} dla {user_id}")
+    
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        prefix = f"{user_id}/"
+        blob_name = prefix + filename
+        
+        blob_client = container_client.get_blob_client(blob_name)
+        
+        if not blob_client.exists():
+             print(f"[Async] Błąd: Plik {blob_name} nie istnieje.")
+             return
+
+        download_stream = blob_client.download_blob()
+        file_content = io.BytesIO(download_stream.readall())
+        
+        with zipfile.ZipFile(file_content) as z:
+            count = 0
+            for inner_filename in z.namelist():
+                if not inner_filename.endswith('/'):
+                    target_blob_name = f"{user_id}/{inner_filename}"
+                    target_blob_client = container_client.get_blob_client(target_blob_name)
+                    with z.open(inner_filename) as f:
+                        target_blob_client.upload_blob(f, overwrite=True)
+                    count += 1
+        
+        add_to_logbook("Auto-Unpack", filename, f"Automatycznie rozpakowano {count} plików.")
+        print(f"[Async] Rozpakowano {count} plików z {filename}.")
+        
+        blob_client.delete_blob()
+        add_to_logbook("Auto-Cleanup", filename, "Usunięto archiwum ZIP po rozpakowaniu.")
+        print(f"[Async] Usunięto oryginalny plik {filename}.")
+        
+    except Exception as e:
+        print(f"[Async] Błąd podczas rozpakowywania {filename}: {e}")
+        add_to_logbook("Błąd Auto-Unpack", filename, str(e)) 
 
 def add_to_logbook(action, filename, details=""):
     """Dodaje wpis do logbooka."""
@@ -200,7 +245,14 @@ def upload():
         add_to_logbook("Upload", file.filename, "Pomyślnie wgrano plik do chmury")
 
         print(f"Plik {file.filename} przesłany do Azure Blob Storage")
-        flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
+        
+        if file.filename.lower().endswith('.zip'):
+            thread = threading.Thread(target=background_unpack, args=(user_id, file.filename))
+            thread.start()
+            flash(f"Plik {file.filename} przesłany. Rozpakowywanie w tle rozpoczęte.", "info")
+        else:
+            flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
+            
         return redirect(url_for('files'))
 
     except Exception as e:
@@ -303,13 +355,12 @@ def delete_file():
         blob_client.delete_blob()
         add_to_logbook("Usunięcie", filename, "Usunięto plik z chmury")
         
-        # Try to delete associated description
         try:
             desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
             desc_blob_client = container_client.get_blob_client(desc_blob_name)
             desc_blob_client.delete_blob()
         except:
-            pass # Ignore if description doesn't exist
+            pass
 
         flash(f"Plik {filename} został usunięty.", "success")
     except Exception as e:
@@ -344,7 +395,6 @@ def delete_multiple():
                 blob_client = container_client.get_blob_client(blob_name)
                 blob_client.delete_blob()
                 
-                # Try to delete associated description
                 try:
                     desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
                     desc_blob_client = container_client.get_blob_client(desc_blob_name)
@@ -469,12 +519,8 @@ def describe_file():
             print(f"Zapisano opis dla {filename}")
         except Exception as upload_e:
             print(f"Błąd zapisu opisu: {upload_e}")
-            # Non-critical error, continue to show it to user
-        
-        # We need to pass this description back to the template.
-        # Since we redirect, we use flash, but distinct category or special handling in template?
-        # Let's use a special flash category 'description'.
-        flash(description, "description_result") # Use specific category for modal popup in UI
+            
+        flash(description, "description_result")
         
     except Exception as e:
         print(f"Błąd generowania opisu: {e}")
@@ -496,7 +542,6 @@ def view_description():
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
         user_id = get_user_id()
-        # Note: Description filenames have .txt appended
         desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
         
         blob_client = container_client.get_blob_client(desc_blob_name)
