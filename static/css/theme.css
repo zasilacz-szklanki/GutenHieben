@@ -1,0 +1,165 @@
+/* Neon Theme Variables */
+:root {
+    --neon-bg: #050510;
+    --neon-card-bg: #121225;
+    --neon-pink: #ff0099;
+    --neon-cyan: #00f3ff;
+    --neon-text: #e0e0eff;
+    --neon-border: rgba(255, 0, 153, 0.3);
+}
+
+body {
+    background-color: var(--neon-bg);
+    color: var(--neon-text);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 5px var(--neon-cyan), 0 0 10px var(--neon-cyan);
+}
+
+a {
+    color: var(--neon-pink);
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+a:hover {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px var(--neon-cyan);
+}
+
+/* Buttons */
+.btn-primary {
+    background-color: transparent;
+    border: 2px solid var(--neon-pink);
+    color: var(--neon-pink);
+    box-shadow: 0 0 5px var(--neon-pink);
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+    background-color: var(--neon-pink) !important;
+    color: #fff !important;
+    border-color: var(--neon-pink) !important;
+    box-shadow: 0 0 20px var(--neon-pink);
+}
+
+.btn-secondary,
+.btn-info,
+.btn-success,
+.btn-danger,
+.btn-warning {
+    background-color: transparent;
+    border: 2px solid var(--neon-cyan);
+    color: var(--neon-cyan);
+    box-shadow: 0 0 5px var(--neon-cyan);
+    transition: all 0.3s ease;
+}
+
+.btn-secondary:hover,
+.btn-info:hover,
+.btn-success:hover,
+.btn-danger:hover,
+.btn-warning:hover {
+    background-color: var(--neon-cyan) !important;
+    color: #000 !important;
+    /* Black text on cyan for contrast */
+    border-color: var(--neon-cyan) !important;
+    box-shadow: 0 0 20px var(--neon-cyan);
+}
+
+/* Specific overrides for button types to have some variety if needed, but keeping it simple neon blue/pink for now based on request */
+.btn-danger {
+    border-color: #ff3333;
+    color: #ff3333;
+    box-shadow: 0 0 5px #ff3333;
+}
+
+.btn-danger:hover {
+    background-color: #ff3333 !important;
+    border-color: #ff3333 !important;
+    box-shadow: 0 0 20px #ff3333;
+}
+
+
+/* Forms */
+.form-control,
+.form-select {
+    background-color: var(--neon-card-bg);
+    border: 1px solid var(--neon-cyan);
+    color: var(--neon-text);
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--neon-card-bg);
+    border-color: var(--neon-pink);
+    color: var(--neon-text);
+    box-shadow: 0 0 10px var(--neon-pink);
+}
+
+.form-floating label {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Cards & Containers */
+.card,
+.modal-content {
+    background-color: var(--neon-card-bg);
+    border: 1px solid var(--neon-cyan);
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.1);
+}
+
+.modal-header,
+.modal-footer {
+    border-color: var(--neon-cyan);
+}
+
+.alert-success {
+    background-color: rgba(0, 243, 255, 0.1);
+    border-color: var(--neon-cyan);
+    color: var(--neon-cyan);
+}
+
+.alert-danger {
+    background-color: rgba(255, 51, 51, 0.1);
+    border-color: #ff3333;
+    color: #ff3333;
+}
+
+/* Tables */
+.table {
+    color: var(--neon-text);
+}
+
+.table-dark {
+    background-color: #000;
+    color: var(--neon-cyan);
+}
+
+.table-striped>tbody>tr:nth-of-type(odd)>* {
+    color: var(--neon-text);
+    box-shadow: inset 0 0 0 9999px rgba(0, 243, 255, 0.05);
+}
+
+.table-bordered {
+    border-color: var(--neon-cyan);
+}
+
+/* Misc */
+.text-muted {
+    color: #aaa !important;
+}
+
+main {
+    padding-top: 2rem;
+}
