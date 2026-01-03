@@ -7,14 +7,12 @@ import threading
 import io
 from datetime import datetime
 from azure.storage.blob import BlobServiceClient
-from flask import (Flask, redirect, render_template, request,
-                   send_from_directory, url_for, Response, flash, abort)
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
+from azure.data.tables import TableServiceClient, UpdateMode
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 
 app = Flask(__name__)
 LOG_FILE = 'logbook.json'
-USERS_FILE = 'users.json'
+TABLE_NAME = 'users'
 ADMIN_SECRET = 'Cloud2025'
 
 app.secret_key = "DTS"
@@ -28,68 +26,49 @@ class User(UserMixin):
         self.id = id
         self.is_admin = is_admin
 
-def load_users_data():
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_users_data(users):
-    with open(USERS_FILE, 'w') as f:
-        json.dump(users, f, indent=4)
+def get_table_client():
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    table_service = TableServiceClient.from_connection_string(conn_str=AZURE_STORAGE_CONNECTION_STRING)
+    table_client = table_service.get_table_client(table_name=TABLE_NAME)
+    try:
+        table_client.create_table()
+    except ResourceExistsError:
+        pass
+    return table_client
 
 @login_manager.user_loader
 def load_user(user_id):
-    users = load_users_data()
-    if user_id in users:
-        return User(user_id, users[user_id].get('is_admin', False))
-    return None 
-
-def background_unpack(user_id, filename):
-    """Logika rozpakowywania ZIP w tle."""
-    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-    CONTAINER_NAME = "files"
-    
-    print(f"[Async] Rozpoczynam rozpakowywanie: {filename} dla {user_id}")
-    
     try:
-        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-        prefix = f"{user_id}/"
-        blob_name = prefix + filename
-        
-        blob_client = container_client.get_blob_client(blob_name)
-        
-        if not blob_client.exists():
-             print(f"[Async] Błąd: Plik {blob_name} nie istnieje.")
-             return
-
-        download_stream = blob_client.download_blob()
-        file_content = io.BytesIO(download_stream.readall())
-        
-        with zipfile.ZipFile(file_content) as z:
-            count = 0
-            for inner_filename in z.namelist():
-                if not inner_filename.endswith('/'):
-                    target_blob_name = f"{user_id}/{inner_filename}"
-                    target_blob_client = container_client.get_blob_client(target_blob_name)
-                    with z.open(inner_filename) as f:
-                        target_blob_client.upload_blob(f, overwrite=True)
-                    count += 1
-        
-        add_to_logbook("Auto-Unpack", filename, f"Automatycznie rozpakowano {count} plików.")
-        print(f"[Async] Rozpakowano {count} plików z {filename}.")
-        
-        blob_client.delete_blob()
-        add_to_logbook("Auto-Cleanup", filename, "Usunięto archiwum ZIP po rozpakowaniu.")
-        print(f"[Async] Usunięto oryginalny plik {filename}.")
-        
+        table_client = get_table_client()
+        user_entity = table_client.get_entity(partition_key="users", row_key=user_id)
+        return User(user_id, user_entity.get('is_admin', False))
+    except ResourceNotFoundError:
+        return None
     except Exception as e:
-        print(f"[Async] Błąd podczas rozpakowywania {filename}: {e}")
-        add_to_logbook("Błąd Auto-Unpack", filename, str(e)) 
+        print(f"Błąd ładowania użytkownika: {e}")
+        return None
+
+def authenticate_user(username, password):
+    try:
+        table_client = get_table_client()
+        user_entity = table_client.get_entity(partition_key="users", row_key=username)
+        if check_password_hash(user_entity['password'], password):
+            return User(username, user_entity.get('is_admin', False))
+    except ResourceNotFoundError:
+        return None
+    except Exception as e:
+        print(f"Bład autentykacji: {e}")
+    return None
+
+def create_user(username, password, is_admin=False):
+    table_client = get_table_client()
+    user_entity = {
+        'PartitionKey': "users",
+        'RowKey': username,
+        'password': generate_password_hash(password),
+        'is_admin': is_admin
+    }
+    table_client.create_entity(entity=user_entity)
 
 def add_to_logbook(action, filename, details=""):
     """Dodaje wpis do logbooka."""
@@ -154,10 +133,9 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        users = load_users_data()
+        user = authenticate_user(username, password)
         
-        if username in users and check_password_hash(users[username]['password'], password):
-            user = User(username, users[username].get('is_admin', False))
+        if user:
             login_user(user)
             flash('Zalogowano pomyślnie!', 'success')
             return redirect(url_for('index'))
@@ -174,24 +152,29 @@ def register():
         is_admin = request.form.get('is_admin') == '1'
         admin_code = request.form.get('admin_code')
         
-        users = load_users_data()
-        
-        if username in users:
+        try:
+            table_client = get_table_client()
+            table_client.get_entity(partition_key="users", row_key=username)
             flash('Użytkownik o takiej nazwie już istnieje.', 'warning')
             return redirect(url_for('register'))
+        except ResourceNotFoundError:
+            pass
+        except Exception as e:
+            flash(f"Błąd bazy danych: {e}", "danger")
+            return redirect(url_for('register'))
+
             
         if is_admin and admin_code != ADMIN_SECRET:
              flash('Nieprawidłowy kod administratora.', 'danger')
              return redirect(url_for('register'))
         
-        users[username] = {
-            'password': generate_password_hash(password),
-            'is_admin': is_admin
-        }
-        save_users_data(users)
-        
-        flash('Konto utworzone pomyślnie! Możesz się zalogować.', 'success')
-        return redirect(url_for('login'))
+        try:
+            create_user(username, password, is_admin)
+            flash('Konto utworzone pomyślnie! Możesz się zalogować.', 'success')
+            return redirect(url_for('login'))
+        except Exception as e:
+             flash(f'Błąd podczas tworzenia konta: {e}', 'danger')
+             return redirect(url_for('register'))
         
     return render_template('register.html')
 
@@ -511,7 +494,6 @@ def describe_file():
         description = chat_completion.choices[0].message.content
         
         add_to_logbook("AI Opis", filename, "Wygenerowano opis przy użyciu Groq/Llama")
-        # Save description to subfolder
         try:
             desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
             desc_blob_client = container_client.get_blob_client(desc_blob_name)

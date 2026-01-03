@@ -3,4 +3,4 @@ gunicorn
 azure-storage-blob
 groq
 flask-login
-werkzeug
+azure-data-tables
