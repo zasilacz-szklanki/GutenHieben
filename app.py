@@ -13,7 +13,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 LOG_FILE = 'logbook.json'
 USERS_FILE = 'users.json'
-ADMIN_SECRET = 'Cloud2025' # Simple secret for creating admin
+ADMIN_SECRET = 'Cloud2025'
 
 app.secret_key = "DTS"
 
