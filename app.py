@@ -307,7 +307,7 @@ def files():
         return "Wystąpił błąd podczas pobierania listy plików."
 
 
-@app.route('/download/<filename>')
+@app.route('/download/<path:filename>')
 @login_required
 def download(filename):
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
