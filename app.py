@@ -142,6 +142,9 @@ def background_unpack(user_id, filename):
                     
         add_to_logbook("Rozpakowanie tło", filename, f"Pomyślnie rozpakowano {count} plików z tła")
         print(f"Background unpack finished for {filename}: {count} files.")
+        
+        blob_client.delete_blob()
+        add_to_logbook("Usunięcie ZIP", filename, "Usunięto plik ZIP po rozpakowaniu (zostawiono samą jego zawartość)")
 
     except Exception as e:
         print(f"Background unpack error for {filename}: {e}")
