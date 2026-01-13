@@ -145,8 +145,8 @@ def background_unpack(user_id, filename):
                         target_blob_client.upload_blob(f, overwrite=True)
                     count += 1
                     
-        add_to_logbook("Rozpakowanie tło", filename, f"Pomyślnie rozpakowano {count} plików z tła")
-        print(f"Background unpack finished for {filename}: {count} files.")
+        add_to_logbook("Rozpakowanie", filename, f"Rozpakowano archiwum ZIP ({count} plików)")
+        flash(f"Pomyślnie rozpakowano {count} plików z archiwum {filename}!", "success")
         
         blob_client.delete_blob()
         add_to_logbook("Usunięcie ZIP", filename, "Usunięto plik ZIP po rozpakowaniu (zostawiono samą jego zawartość)")
@@ -329,6 +329,7 @@ def delete_multiple():
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
         user_id = get_user_id()
         prefix = f"{user_id}/"
+        deleted_files = ""
 
         for filename in filenames:
             try:
@@ -342,7 +343,7 @@ def delete_multiple():
                     desc_blob_client.delete_blob()
                 except:
                     pass
-
+                deleted_files += f"{filename}\n"
                 success_count += 1
             except Exception as e:
                 print(f"Błąd usuwania pliku {filename}: {e}")
@@ -350,6 +351,7 @@ def delete_multiple():
 
         if success_count > 0:
             flash(f"Pomyślnie usunięto {success_count} plików.", "success")
+            add_to_logbook(f"Pomyślnie usunięto {success_count} plików. Usunięte pliki: {deleted_files}", "success")
         if fail_count > 0:
             flash(f"Nie udało się usunąć {fail_count} plików.", "danger")
 
@@ -357,48 +359,6 @@ def delete_multiple():
         print(f"Błąd połączenia z Azure: {e}")
         flash("Wystąpił błąd podczas usuwania plików.", "danger")
     
-    return redirect(url_for('files'))
-
-@app.route('/unpack', methods=['POST'])
-def unpack_file():
-    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-    CONTAINER_NAME = "files"
-
-    filename = request.form.get('filename')
-    if not filename:
-        flash("Brak nazwy pliku do rozpakowania.", "danger")
-        return redirect(url_for('files'))
-
-    try:
-        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-        user_id = get_user_id()
-        prefix = f"{user_id}/"
-        blob_name = prefix + filename
-        
-        blob_client = container_client.get_blob_client(blob_name)
-        download_stream = blob_client.download_blob()
-        
-        import io
-        file_content = io.BytesIO(download_stream.readall())
-        
-        with zipfile.ZipFile(file_content) as z:
-            count = 0
-            for inner_filename in z.namelist():
-                if not inner_filename.endswith('/'):
-                    target_blob_name = f"{user_id}/{inner_filename}"
-                    target_blob_client = container_client.get_blob_client(target_blob_name)
-                    with z.open(inner_filename) as f:
-                        target_blob_client.upload_blob(f, overwrite=True)
-                    count += 1
-
-        add_to_logbook("Rozpakowanie", filename, f"Rozpakowano archiwum ZIP ({count} plików)")
-        flash(f"Pomyślnie rozpakowano {count} plików z archiwum {filename}!", "success")
-
-    except Exception as e:
-        print(f"Błąd rozpakowywania: {e}")
-        flash(f"Nie udało się rozpakować pliku: {e}", "danger")
-
     return redirect(url_for('files'))
 
 @app.route('/describe', methods=['POST'])
