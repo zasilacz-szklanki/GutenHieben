@@ -3,6 +3,8 @@ import json
 import os
 import zipfile
 import groq
+import threading
+import io
 from datetime import datetime
 from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
@@ -104,6 +106,55 @@ def test():
 def logout():
     return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
 
+def background_unpack(user_id, filename):
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        prefix = f"{user_id}/"
+        blob_name = prefix + filename
+        
+        blob_client = container_client.get_blob_client(blob_name)
+        download_stream = blob_client.download_blob()
+        
+        file_content = io.BytesIO(download_stream.readall())
+        
+        count = 0
+        with zipfile.ZipFile(file_content) as z:
+            for inner_filename in z.namelist():
+                if not inner_filename.endswith('/'):
+                    safe_filename = inner_filename.lstrip('/')
+                    target_blob_name = f"{user_id}/{safe_filename}"
+                    target_blob_client = container_client.get_blob_client(target_blob_name)
+                    
+                    exists = target_blob_client.exists()
+                    
+                    if exists:
+                        filename_base, filename_ext = os.path.splitext(safe_filename)
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        new_filename = f"{filename_base}_{timestamp}{filename_ext}"
+                        
+                        target_blob_name = f"{user_id}/{new_filename}"
+                        target_blob_client = container_client.get_blob_client(target_blob_name)
+                        
+                        add_to_logbook("Wersjonowanie tło", safe_filename, f"Plik istniał. Zmieniono nazwę na: {new_filename}")
+
+                    with z.open(inner_filename) as f:
+                        target_blob_client.upload_blob(f, overwrite=True)
+                    count += 1
+                    
+        add_to_logbook("Rozpakowanie tło", filename, f"Pomyślnie rozpakowano {count} plików z tła")
+        print(f"Background unpack finished for {filename}: {count} files.")
+        
+        blob_client.delete_blob()
+        add_to_logbook("Usunięcie ZIP", filename, "Usunięto plik ZIP po rozpakowaniu (zostawiono samą jego zawartość)")
+
+    except Exception as e:
+        print(f"Background unpack error for {filename}: {e}")
+        add_to_logbook("Błąd Rozpakowania tło", filename, str(e))
+
 @app.route('/upload', methods=['POST'])
 def upload():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
@@ -142,7 +193,14 @@ def upload():
         add_to_logbook("Upload", file.filename, "Pomyślnie wgrano plik do chmury")
 
         print(f"Plik {file.filename} przesłany do Azure Blob Storage")
-        flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
+        
+        if file.filename.lower().endswith('.zip'):
+            thread = threading.Thread(target=background_unpack, args=(user_id, file.filename))
+            thread.start()
+            flash(f"Plik {file.filename} przesłany. Rozpakowywanie w tle rozpoczęte.", "info")
+        else:
+            flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
+            
         return redirect(url_for('files'))
 
     except Exception as e:

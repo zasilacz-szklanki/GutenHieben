@@ -1,0 +1,195 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[polish]{babel}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{titlesec}
+\usepackage{indentfirst}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{hyperref} % Hyperref warto ładować na końcu preambuły
+
+\geometry{
+	a4paper,
+	total={170mm,257mm},
+	left=20mm,
+	top=20mm,
+}
+\onehalfspacing
+
+\title{\textbf{Dokumentacja Projektowa}\\Systemy Przetwarzania w Chmurze}
+\author{Zespół Projektowy}
+\date{\today}
+\newpage
+
+\begin{document}
+	
+	\maketitle
+	\tableofcontents
+	\newpage
+	
+	\section{Wprowadzenie}
+	Niniejsza dokumentacja stanowi podsumowanie prac nad projektem \textit{GutCloud} realizowanym w ramach zajęć projektowych z przedmiotu "Systemy Przetwarzania w Chmurze". Głównym celem było zaprojektowanie, zaimplementowanie oraz wdrożenie systemu informatycznego opartego na modelu przetwarzania w chmurze.
+	
+	Stworzony system to aplikacja webowa służąca do zarządzania plikami użytkowników. Jest to odpowiedź na rosnące zapotrzebowanie na bezpieczne, skalowalne i godne zaufania repozytoria danych. Tradycyjne metody przechowywania danych na dyskach lokalnych stają się niewystarczające dla użytkowników korzystających z wielu urządzeń jednocześnie i oczekujących dostępu do swoich zasobów. Nasza aplikacja rozwiązuje ten problem, wykorzystując infrastrukturę chmurową, gwarantującą wysoką dostępność i trwałość.
+	
+	System umożliwia użytkownikom bezpieczną metodę logowania oferowaną przez dostawcę usługi chmurowej oraz wykonywanie podstawowych operacji na plikach. Zaimplementowane mechanizmy umożliwiają wygodne przesyłanie całych struktur katalogów. Zastosowane zostały rozwiązania z zakresu Smart City, poprzez integrację systemu z algorytmami sztucznej inteligencji. Aplikacja wykorzystuje model językowy do generowania inteligentnych podsumowań zawartości plików tekstowych. Dzięki temu użytkownik nie musi otwierać każdego dokumentu, aby poznać jego treść.
+	
+	Architektura rozwiązania opiera się na sprawdzonym wzorcu Model-View-Controller zaimplementowanym przy użyciu języka Python i frameworka Flask. Wybór tej technologii był podyktowany faktem, iż Python jest obecnie jednym z najpopularniejszych języków w świecie analizy danych i technologii chmurowych, co ułatwiło integrację z bibliotekami SDK Azure oraz API sztucznej inteligencji. Warstwa danych została całkowicie odseparowana od warstwy aplikacji poprzez wykorzystanie usług Azure Blob Storage. Taka separacja zapewnia skalowalność, bez ingerencji w warstwę danych.
+	
+	Proces realizacji projektu obejmował kilka etapów: od analizy wymagań, przez projektowanie architektury, implementację poszczególnych modułów, aż po wdrożenie. Każdy z tych etapów pozwolił zespołowi na zdobycie cennych umiejętności w zakresie administrowania chmurą, programowania aplikacji webowych oraz pracy grupowej z wykorzystaniem systemów kontroli wersji.
+	
+	W dalszej części dokumentacji przedstawiono szczegółowy opis techniczny, analizę wykorzystanych technologii i usług chmurowych oraz instrukcję obsługi dla użytkownika końcowego.
+	
+	\newpage
+	\section{Prezentacja chmury i dostawcy}
+	Jako dostawcę usług chmurowych wybrano \textbf{Microsoft Azure}. Jest to jedna z czołowych platform chmurowych na rynku, a decyzja o jej wyborze podyktowana była kilkoma czynnikami:
+	\begin{enumerate}
+		\item \textbf Azure oferuje stabilne i sprawdzone usługi magazynowania danych, które są fundamentem naszego projektu.
+		\item \textbf Dostępność doskonałych bibliotek SDK dla języka Python znacznie przyspieszyła proces rozwoju aplikacji.
+		\item \textbf{Dokumentacja}: Microsoft udostępnia obszerną dokumentację techniczną oraz przykłady kodu, co było ogromną pomocą podczas nauki i rozwiązywania problemów.
+		\item \textbf{Kredyty studenckie/darmowe zasoby}: Dostępność darmowych tierów usług dla studentów i deweloperów.
+	\end{enumerate}
+	
+	Najważniejsze funkcje i usługi Azure wykorzystane w projekcie:
+	\begin{itemize}
+		\item \textbf{Azure Storage Account}: Kontener dla wszystkich usług danych. W jego ramach wykorzystujemy:
+		\begin{itemize}
+			\item \textbf{Blob Storage}: Usługa do przechowywania ogromnych ilości danych niestrukturalnych. Blob Storage jest idealny do udostępniania plików bezpośrednio w przeglądarce, przechowywania plików do dostępu rozproszonego, strumieniowania wideo i audio oraz przechowywania danych do kopii zapasowych i przywracania, odzyskiwania po awarii i archiwizacji. W naszym projekcie użyliśmy go do trwałego zapisu plików użytkowników.
+			\item \textbf{Table Storage}: Usługa przechowująca ustrukturyzowane dane NoSQL w chmurze, zapewniająca magazyn kluczy/atrybutów z bezschematowym projektem. Jest to szybkie i tanie rozwiązanie dla danych, które nie wymagają złożonych złączeń SQL. W projekcie posłużyła jako baza danych użytkowników (credentials, flagi admina).
+		\end{itemize}
+	\end{itemize}
+	
+	\newpage
+	\section{Prezentacja techniczna aplikacji}
+	
+	\subsection{Wymagania}
+	System został zaprojektowany w oparciu o następujące wymagania:
+	\begin{itemize}
+		\item \textbf{Funkcjonalne}:
+		\begin{itemize}
+			\item Logowanie użytkowników.
+			\item Przesyłanie plików do chmury.
+			\item Pobieranie plików na urządzenie lokalne.
+			\item Usuwanie plików (pojedynczo i masowo).
+			\item Obsługa plików ZIP (automatyczne rozpakowywanie w tle).
+			\item Integracja z AI do generowania opisów plików tekstowych.
+			\item Logowanie zdarzeń systemowych (dla administratora).
+		\end{itemize}
+		\item \textbf{Niefunkcjonalne}:
+		\begin{itemize}
+			\item Bezpieczeństwo danych.
+			\item Skalowalność (dzięki Azure Blob Storage).
+			\item Responsywność interfejsu.
+			\item Dostępność gwarantowana przez SLA dostawcy chmury.
+		\end{itemize}
+	\end{itemize}
+	
+	\subsection{Architektura i Warstwa Logiczna}
+	Aplikacja działa w architekturze klient-serwer.
+	\begin{itemize}
+		\item \textbf{Backend}: Python 3.x + Flask. Flask pełni rolę kontrolera, obsługując routing zapytań HTTP. Wykorzystuje biblioteki \texttt{azure.storage.blob} do komunikacji z Blob Storage oraz \texttt{azure.data.tables} do obsługi Table Storage.
+		\item \textbf{Frontend}: HTML5 + CSS + Bootstrap. Strony są generowane dynamicznie po stronie serwera.
+		\item \textbf{Baza Danych}: Azure Table Storage (NoSQL).
+	\end{itemize}
+	
+	Kluczowe mechanizmy logiczne:
+	\begin{itemize}
+		\item \textbf{Wersjonowanie}: Przy przesyłaniu pliku o istniejącej nazwie, system nie nadpisuje go, lecz dodaje timestamp do nazwy (np. \texttt{plik\_20231012.txt}).
+		\item \textbf{Asynchroniczność}: Rozpakowywanie archiwów ZIP jest operacją czasochłonną, dlatego została wydzielona do osobnego wątku. Dzięki temu użytkownik natychmiast otrzymuje informację o rozpoczęciu procesu i może kontynuować pracę, podczas gdy serwer przetwarza plik w tle.
+		\item \textbf{Integracja z LLM}: Wykorzystanie biblioteki \texttt{groq} do wysłania fragmentu tekstu pliku do modelu Llama 3 i odebrania wygenerowanego podsumowania.
+	\end{itemize}
+	
+	\newpage
+	\section{Aspekty Smart City i STEM}
+	Aplikacja realizuje koncepcje Smart City poprzez ideę \textbf{otwartych i dostępnych danych (Open Data \& Accessibility)}. W inteligentnym mieście obywatele i urzędy muszą mieć możliwość wymiany dokumentów w sposób cyfrowy, bezpieczny i niezależny od lokalizacji. Nasz system może stanowić prototyp miejskiej platformy wymiany dokumentów, gdzie mieszkańcy składają wnioski (upload plików), a systemy AI wstępnie je kategoryzują i opisują (automatyzacja urzędów).
+	
+	Wymiar \textbf{STEM} (Science, Technology, Engineering, Mathematics) jest realizowany poprzez:
+	\begin{itemize}
+		\item \textbf{Science}: Zastosowanie najnowszych osiągnięć w dziedzinie przetwarzania języka naturalnego (LLM) do analizy treści.
+		\item \textbf{Technology}: Użycie chmury obliczeniowej, która jest obecnie standardem technologicznym w przemyśle IT.
+		\item \textbf{Engineering}: Zaprojektowanie i wdrożenie kompletnego systemu informatycznego z uwzględnieniem obsługi błędów, wielowątkowości i zarządzania zależnościami.
+		\item \textbf{Mathematics}: Wykorzystanie kryptografii i logiki matematycznej w procesach autoryzacji i przetwarzania danych.
+	\end{itemize}
+	
+	\newpage
+	\section{Rozwiązania chmurowe}
+	Kluczowe rozwiązania chmurowe zaimplementowane w projekcie:
+	\begin{enumerate}
+		\item \textbf{Azure Blob Storage}:
+		\begin{itemize}
+			\item Kontener \texttt{files} przechowuje wszystkie pliki.
+			\item Ustrukturyzowane nazewnictwo blobów (\texttt{user\_id/nazwa\_pliku}) emuluje system plików, mimo płaskiej struktury blob storage. Zapewnia to separację danych między użytkownikami na poziomie aplikacji.
+		\end{itemize}
+		\item \textbf{Azure Table Storage}:
+		\begin{itemize}
+			\item Wykorzystanie \texttt{PartitionKey} i \texttt{RowKey} do szybkiego dostępu do danych użytkownika. \texttt{PartitionKey="users"} grupuje wszystkich użytkowników, a \texttt{RowKey} (login) zapewnia unikalność i szybkie wyszukiwanie.
+		\end{itemize}
+		\item \textbf{Groq AI Cloud}:
+		\begin{itemize}
+			\item Wykorzystanie mocy obliczeniowej chmury Groq do inferencji modelu językowego, co odciąża serwer aplikacji.
+		\end{itemize}
+	\end{enumerate}
+	
+	\newpage
+	\section{Podręcznik użytkownika}
+	\subsection{Rozpoczęcie pracy}
+	\begin{enumerate}
+		\item Otwórz przeglądarkę i wejdź na adres aplikacji.
+		\item Jeśli nie masz konta, wybierz opcję "Zarejestruj się". Podaj unikalny login i hasło.
+		\item Zaloguj się korzystając z utworzonych danych.
+	\end{enumerate}
+	
+	\subsection{Główne operacje}
+	\begin{itemize}
+		\item \textbf{Przesyłanie plików}: W sekcji "Upload" wybierz plik z dysku lokalnego. Obsługiwane są wszystkie formaty. Pliki ZIP zostaną automatycznie rozpakowane.
+		\item \textbf{Przeglądanie plików}: Lista Twoich plików jest widoczna na stronie głównej. Możesz sortować je po dacie lub nazwie.
+		\item \textbf{Pobieranie}: Kliknij nazwę pliku, aby pobrać go na dysk.
+		\item \textbf{Uzyskanie opisu AI}: Przy plikach tekstowych (.txt) widoczny jest przycisk "AI Opis". Kliknij go, aby wygenerować podsumowanie. Po wygenerowaniu, przycisk zmieni się na "Pokaż Opis".
+		\item \textbf{Usuwanie}: Aby usunąć plik, kliknij ikonę kosza. Możesz też zaznaczyć checkboxami wiele plików i użyć przycisku "Usuń zaznaczone" na dole ekranu.
+	\end{itemize}
+	
+	\newpage
+	\section{Wnioski}
+	Realizacja projektu chmurowego \textit{GutCloud} dostarczyła zespołowi wielu cennych spostrzeżeń. Przejście przez pełny cykl życia oprogramowania – od wstępnej koncepcji, przez dobór technologii, aż po implementację i wdrożenie – pozwoliło na pełne zrozumienie wyzwań, z jakimi mierzą się współcześni inżynierowie oprogramowania.
+	
+	Pierwszym kluczowym wnioskiem jest potwierdzenie ogromnej elastyczności i potęgi modelu \textbf{Platform as a Service (PaaS)} oraz \textbf{Infrastructure as a Service (IaaS)}. Wykorzystanie usług zarządzanych (Managed Services), takich jak Azure Blob Storage czy Table Storage, pozwoliło nam zaoszczędzić dziesiątki godzin pracy, które musielibyśmy poświęcić na konfigurowanie własnych serwerów plików, baz danych i systemów backupu. Chmura rzeczywiście demokratyzuje dostęp do technologii enterprise – jako studenci mieliśmy dostęp do tej samej infrastruktury, z której korzystają największe korporacje świata.
+	
+	W kontekście technologicznym, projekt udowodnił, że język \textbf{Python w połączeniu z frameworkiem Flask} jest doskonałym wyborem do szybkiego prototypowania i budowania aplikacji chmurowych (Rapid Application Development). Biblioteki dostarczone przez Microsoft (Azure SDK for Python) są intuicyjne i dobrze udokumentowane, co pozwoliło na bezproblemową integrację z chmurą. Jednakże, nie obyło się bez wyzwań. Zarządzanie operacjami długotrwałymi, takimi jak rozpakowywanie dużych archiwów ZIP, wymagało zastosowania programowania współbieżnego (wątki). Uświadomiło nam to, że w środowisku webowym nie można blokować głównego wątku obsługi żądań i konieczne jest stosowanie patternów takich jak "Background Workers" czy kolejki zadań.
+	
+	Integracja z modelem językowym (AI) była najbardziej innowacyjnym elementem projektu. Pokazała ona, że współczesne aplikacje chmurowe ewoluują w stronę systemów inteligentnych. Możliwość automatycznego streszczania dokumentów to funkcja, która realnie zwiększa produktywność użytkownika. Wniosek płynący z tego doświadczenia jest taki, że API modeli generatywnych stają się nowym standardem w toolboxie programisty, podobnie jak kiedyś stały się bazy danych SQL.
+	
+	Podsumowując, projekt zakończył się sukcesem. Wszystkie założone funkcjonalności zostały zaimplementowane i przetestowane. Aplikacja jest stabilna, skalowalna i bezpieczna. W przyszłości system można by rozwinąć o dodatkowe funkcje, takie jak uwierzytelnianie wieloskładnikowe (MFA), pełnotekstowe wyszukiwanie w dokumentach (Azure Cognitive Search) czy konteneryzację aplikacji przy użyciu Dockera i Kubernetes, co jeszcze bardziej zbliżyłoby ją do komercyjnych standardów produkcyjnych. Projekt ten był doskonałą lekcją inżynierii chmurowej i przygotował nas do pracy w nowoczesnym środowisku IT.
+	
+	\newpage
+	\section{Bibliografia}
+	\begin{enumerate}
+		\item Dokumentacja Microsoft Azure, \url{https://learn.microsoft.com/en-us/azure/} - dostęp: styczeń 2026.
+		\item Dokumentacja Frameworka Flask, \url{https://flask.palletsprojects.com/} - dostęp: styczeń 2026.
+		\item Dokumentacja Azure SDK for Python (Storage Blob), \url{https://pypi.org/project/azure-storage-blob/} - dostęp: styczeń 2026.
+		\item Groq API Documentation, \url{https://console.groq.com/docs/quickstart} - dostęp: styczeń 2026.
+		\item "Cloud Computing Concepts, Technology \& Architecture", Thomas Erl, Ricardo Puttini, Zaigham Mahmood.
+		\item Materiały dydaktyczne z przedmiotu "Systemy Przetwarzania w Chmurze".
+	\end{enumerate}
+	
+	\section{Członkowie zespołu}
+	\begin{table}[h!]
+		\centering
+		\renewcommand{\arraystretch}{1.5}
+		\begin{tabular}{|p{5cm}|p{9cm}|}
+			\hline
+			\textbf{Imię i Nazwisko} & \textbf{Rola i Obowiązki} \\
+			\hline
+			& \textbf{Team Leader / Backend Developer} \newline Projektowanie architektury systemu, konfiguracja usług Azure, implementacja logiki biznesowej w Pythonie, koordynacja prac zespołu. \\
+			\hline
+			& \textbf{Frontend Developer / UI/UX Designer} \newline Tworzenie szablonów HTML/CSS, projektowanie interfejsu użytkownika, dbałość o responsywność i User Experience. \\
+			\hline
+			& \textbf{Cloud Engineer / Tester} \newline Zarządzanie subskrypcją Azure, testowanie funkcjonalności, przygotowanie dokumentacji testowej, weryfikacja bezpieczeństwa. \\
+			\hline
+		\end{tabular}
+		\caption{Podział ról i obowiązków w zespole projektowym}
+	\end{table}
+	
+\end{document}
