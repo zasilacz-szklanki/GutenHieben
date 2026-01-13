@@ -8,6 +8,7 @@ from azure.storage.blob import BlobServiceClient
 from flask import (Flask, redirect, render_template, request,
                    send_from_directory, url_for, Response, flash)
 
+
 app = Flask(__name__)
 LOG_FILE = 'logbook.json'
 app.secret_key = "DTS" 
