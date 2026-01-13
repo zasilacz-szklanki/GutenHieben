@@ -10,8 +10,8 @@ from azure.storage.blob import BlobServiceClient
 from azure.data.tables import TableServiceClient, UpdateMode
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, Response
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
+# from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+# from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 LOG_FILE = 'logbook.json'
@@ -20,58 +20,58 @@ ADMIN_SECRET = 'Cloud2025'
 
 app.secret_key = "DTS"
 
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
+# login_manager = LoginManager()
+# login_manager.init_app(app)
+# login_manager.login_view = 'login'
 
-class User(UserMixin):
-    def __init__(self, id, is_admin=False):
-        self.id = id
-        self.is_admin = is_admin
+# class User(UserMixin):
+#     def __init__(self, id, is_admin=False):
+#         self.id = id
+#         self.is_admin = is_admin
 
-def get_table_client():
-    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-    table_service = TableServiceClient.from_connection_string(conn_str=AZURE_STORAGE_CONNECTION_STRING)
-    table_client = table_service.get_table_client(table_name=TABLE_NAME)
-    try:
-        table_client.create_table()
-    except ResourceExistsError:
-        pass
-    return table_client
+# def get_table_client():
+#     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+#     table_service = TableServiceClient.from_connection_string(conn_str=AZURE_STORAGE_CONNECTION_STRING)
+#     table_client = table_service.get_table_client(table_name=TABLE_NAME)
+#     try:
+#         table_client.create_table()
+#     except ResourceExistsError:
+#         pass
+#     return table_client
 
-@login_manager.user_loader
-def load_user(user_id):
-    try:
-        table_client = get_table_client()
-        user_entity = table_client.get_entity(partition_key="users", row_key=user_id)
-        return User(user_id, user_entity.get('is_admin', False))
-    except ResourceNotFoundError:
-        return None
-    except Exception as e:
-        print(f"Błąd ładowania użytkownika: {e}")
-        return None
+# @login_manager.user_loader
+# def load_user(user_id):
+#     try:
+#         table_client = get_table_client()
+#         user_entity = table_client.get_entity(partition_key="users", row_key=user_id)
+#         return User(user_id, user_entity.get('is_admin', False))
+#     except ResourceNotFoundError:
+#         return None
+#     except Exception as e:
+#         print(f"Błąd ładowania użytkownika: {e}")
+#         return None
 
-def authenticate_user(username, password):
-    try:
-        table_client = get_table_client()
-        user_entity = table_client.get_entity(partition_key="users", row_key=username)
-        if check_password_hash(user_entity['password'], password):
-            return User(username, user_entity.get('is_admin', False))
-    except ResourceNotFoundError:
-        return None
-    except Exception as e:
-        print(f"Bład autentykacji: {e}")
-    return None
+# def authenticate_user(username, password):
+#     try:
+#         table_client = get_table_client()
+#         user_entity = table_client.get_entity(partition_key="users", row_key=username)
+#         if check_password_hash(user_entity['password'], password):
+#             return User(username, user_entity.get('is_admin', False))
+#     except ResourceNotFoundError:
+#         return None
+#     except Exception as e:
+#         print(f"Bład autentykacji: {e}")
+#     return None
 
-def create_user(username, password, is_admin=False):
-    table_client = get_table_client()
-    user_entity = {
-        'PartitionKey': "users",
-        'RowKey': username,
-        'password': generate_password_hash(password),
-        'is_admin': is_admin
-    }
-    table_client.create_entity(entity=user_entity)
+# def create_user(username, password, is_admin=False):
+#     table_client = get_table_client()
+#     user_entity = {
+#         'PartitionKey': "users",
+#         'RowKey': username,
+#         'password': generate_password_hash(password),
+#         'is_admin': is_admin
+#     }
+#     table_client.create_entity(entity=user_entity)
 
 def add_to_logbook(action, filename, details=""):
     """Dodaje wpis do logbooka."""
@@ -111,9 +111,41 @@ def get_user_id():
     return 'anonymous'
 
 def get_user_info():
-    if current_user.is_authenticated:
-        return {"name": current_user.id}
-    return {"name": "anonymous"}
+    principal_header = request.headers.get('X-MS-CLIENT-PRINCIPAL')
+    if not principal_header:
+        return {"name": "anonymous", "email": None, "provider": None}
+
+    try:
+        decoded = base64.b64decode(principal_header)
+        principal = json.loads(decoded)
+    except Exception:
+        return {"name": "anonymous", "email": None, "provider": None}
+
+    claims = principal.get("claims", [])
+    claim_map = {c.get("typ"): c.get("val") for c in claims if "typ" in c and "val" in c}
+
+    name = (
+        claim_map.get("name") or
+        (
+            (claim_map.get("given_name") and claim_map.get("family_name")) and
+            f"{claim_map.get('given_name')} {claim_map.get('family_name')}"
+        ) or
+        claim_map.get("preferred_username") or
+        claim_map.get("nickname") or
+        principal.get("name") or
+        principal.get("userDetails") or
+        "anonymous"
+    )
+
+    email = (
+        claim_map.get("email") or
+        claim_map.get("emails") or
+        principal.get("userDetails")
+    )
+
+    provider = principal.get("identityProvider")
+
+    return {"name": name, "email": email, "provider": provider}
 
 def background_unpack(user_id, filename):
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
@@ -231,18 +263,10 @@ def register():
     return render_template('register.html')
 
 @app.route('/logout')
-@login_required
 def logout():
-    logout_user()
-    flash('Wylogowano pomyślnie.', 'info')
-    return redirect(url_for('index'))
-
-
-
-
+    return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
 
 @app.route('/upload', methods=['POST'])
-@login_required
 def upload():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -299,7 +323,6 @@ def upload():
 
 
 @app.route('/files')
-@login_required
 def files():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -343,7 +366,6 @@ def files():
 
 
 @app.route('/download/<path:filename>')
-@login_required
 def download(filename):
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -368,7 +390,6 @@ def download(filename):
         return "Wystąpił błąd podczas pobierania pliku."
 
 @app.route('/delete', methods=['POST'])
-@login_required
 def delete_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -405,7 +426,6 @@ def delete_file():
     return redirect(url_for('files'))
 
 @app.route('/delete_multiple', methods=['POST'])
-@login_required
 def delete_multiple():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -454,7 +474,6 @@ def delete_multiple():
     return redirect(url_for('files'))
 
 @app.route('/unpack', methods=['POST'])
-@login_required
 def unpack_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -497,7 +516,6 @@ def unpack_file():
     return redirect(url_for('files'))
 
 @app.route('/describe', methods=['POST'])
-@login_required
 def describe_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -563,7 +581,6 @@ def describe_file():
     return redirect(url_for('files'))
 
 @app.route('/view_description', methods=['POST'])
-@login_required
 def view_description():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -592,7 +609,6 @@ def view_description():
 
 
 @app.route('/logbook')
-@login_required
 def logbook_view():
     if not current_user.is_admin:
         flash("Brak uprawnień do przeglądania logbooka.", "danger")
