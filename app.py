@@ -134,18 +134,21 @@ def background_unpack(user_id, filename):
         with zipfile.ZipFile(file_content) as z:
             for inner_filename in z.namelist():
                 if not inner_filename.endswith('/'):
-                    target_blob_name = f"{user_id}/{inner_filename}"
+                    safe_filename = inner_filename.lstrip('/')
+                    target_blob_name = f"{user_id}/{safe_filename}"
                     target_blob_client = container_client.get_blob_client(target_blob_name)
                     
-                    if target_blob_client.exists():
-                        filename_base, filename_ext = os.path.splitext(inner_filename)
+                    exists = target_blob_client.exists()
+                    
+                    if exists:
+                        filename_base, filename_ext = os.path.splitext(safe_filename)
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         new_filename = f"{filename_base}_{timestamp}{filename_ext}"
                         
                         target_blob_name = f"{user_id}/{new_filename}"
                         target_blob_client = container_client.get_blob_client(target_blob_name)
                         
-                        add_to_logbook("Wersjonowanie tło", inner_filename, f"Plik istniał. Zmieniono nazwę na: {new_filename}")
+                        add_to_logbook("Wersjonowanie tło", safe_filename, f"Plik istniał. Zmieniono nazwę na: {new_filename}")
 
                     with z.open(inner_filename) as f:
                         target_blob_client.upload_blob(f, overwrite=True)
