@@ -146,14 +146,13 @@ def background_unpack(user_id, filename):
                     count += 1
                     
         add_to_logbook("Rozpakowanie", filename, f"Rozpakowano archiwum ZIP ({count} plików)")
-        flash(f"Pomyślnie rozpakowano {count} plików z archiwum {filename}!", "success")
         
         blob_client.delete_blob()
         add_to_logbook("Usunięcie ZIP", filename, "Usunięto plik ZIP po rozpakowaniu (zostawiono samą jego zawartość)")
 
     except Exception as e:
         print(f"Background unpack error for {filename}: {e}")
-        add_to_logbook("Błąd Rozpakowania tło", filename, str(e))
+        add_to_logbook("Błąd Rozpakowania", filename, str(e))
 
 @app.route('/upload', methods=['POST'])
 def upload():
