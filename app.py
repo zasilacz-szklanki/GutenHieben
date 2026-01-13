@@ -3,88 +3,15 @@ import json
 import os
 import zipfile
 import groq
-import threading
-import io
-import uuid
 from datetime import datetime
 from azure.storage.blob import BlobServiceClient
-from azure.data.tables import TableServiceClient, UpdateMode
-from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-import msal
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, Response, session
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from flask_session import Session  # Requires pip install Flask-Session
+from flask import (Flask, redirect, render_template, request,
+                   send_from_directory, url_for, Response, flash)
+
 
 app = Flask(__name__)
-app.config["SESSION_TYPE"] = "filesystem"  # Using server-side session
-Session(app)
-
 LOG_FILE = 'logbook.json'
-TABLE_NAME = 'users'
-
-# MSAL Configuration
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-# Authority: https://login.microsoftonline.com/common (for multi-tenant) or /<tenant_id> (for single tenant)
-AUTHORITY = os.getenv("AUTHORITY", "https://login.microsoftonline.com/common")
-REDIRECT_PATH = "/getAToken"
-SCOPE = ["User.Read"]
-
-app.secret_key = "DTS" # Keep specific key or use os.urandom in production
-
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
-class User(UserMixin):
-    def __init__(self, id, is_admin=False):
-        self.id = id
-        self.is_admin = is_admin
-
-def get_table_client():
-    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-    table_service = TableServiceClient.from_connection_string(conn_str=AZURE_STORAGE_CONNECTION_STRING)
-    table_client = table_service.get_table_client(table_name=TABLE_NAME)
-    try:
-        table_client.create_table()
-    except ResourceExistsError:
-        pass
-    return table_client
-
-@login_manager.user_loader
-def load_user(user_id):
-    # In a real app, you might want to check the user in your DB.
-    # Here we just reconstitute the user from the ID, and check session for admin status if needed.
-    is_admin = session.get('is_admin', False)
-    return User(user_id, is_admin)
-
-def _build_msal_app(cache=None, authority=None):
-    return msal.ConfidentialClientApplication(
-        CLIENT_ID, authority=authority or AUTHORITY,
-        client_credential=CLIENT_SECRET, token_cache=cache)
-
-def _get_token_from_cache(scope=None):
-    cache = msal.SerializableTokenCache()
-    if session.get("token_cache"):
-        cache.deserialize(session["token_cache"])
-    return cache
-
-def _save_cache(cache):
-    if cache.has_state_changed:
-        session["token_cache"] = cache.serialize()
-
-def get_admin_status_from_table(email):
-    """Checks if the email exists in the users table and has is_admin=True"""
-    try:
-        table_client = get_table_client()
-        # RowKey is username/email
-        user_entity = table_client.get_entity(partition_key="users", row_key=email)
-        return user_entity.get('is_admin', False)
-    except ResourceNotFoundError:
-        return False
-    except Exception as e:
-        print(f"Error checking admin status: {e}")
-        return False
+app.secret_key = "DTS" 
 
 def add_to_logbook(action, filename, details=""):
     """Dodaje wpis do logbooka."""
@@ -119,63 +46,44 @@ def get_logbook_entries():
     return []
 
 def get_user_id():
-    if current_user.is_authenticated:
-        return current_user.id
-    return 'anonymous'
+    return request.headers.get('X-MS-CLIENT-PRINCIPAL-ID', 'anonymous')
 
 def get_user_info():
-    if current_user.is_authenticated:
-        return {"name": current_user.id}
-    return {"name": "anonymous"}
-
-def background_unpack(user_id, filename):
-    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-    CONTAINER_NAME = "files"
+    principal_header = request.headers.get('X-MS-CLIENT-PRINCIPAL')
+    if not principal_header:
+        return {"name": "anonymous", "email": None, "provider": None}
 
     try:
-        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-        prefix = f"{user_id}/"
-        blob_name = prefix + filename
-        
-        blob_client = container_client.get_blob_client(blob_name)
-        download_stream = blob_client.download_blob()
-        
-        file_content = io.BytesIO(download_stream.readall())
-        
-        count = 0
-        with zipfile.ZipFile(file_content) as z:
-            for inner_filename in z.namelist():
-                if not inner_filename.endswith('/'):
-                    safe_filename = inner_filename.lstrip('/')
-                    target_blob_name = f"{user_id}/{safe_filename}"
-                    target_blob_client = container_client.get_blob_client(target_blob_name)
-                    
-                    exists = target_blob_client.exists()
-                    
-                    if exists:
-                        filename_base, filename_ext = os.path.splitext(safe_filename)
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        new_filename = f"{filename_base}_{timestamp}{filename_ext}"
-                        
-                        target_blob_name = f"{user_id}/{new_filename}"
-                        target_blob_client = container_client.get_blob_client(target_blob_name)
-                        
-                        add_to_logbook("Wersjonowanie tło", safe_filename, f"Plik istniał. Zmieniono nazwę na: {new_filename}")
+        decoded = base64.b64decode(principal_header)
+        principal = json.loads(decoded)
+    except Exception:
+        return {"name": "anonymous", "email": None, "provider": None}
 
-                    with z.open(inner_filename) as f:
-                        target_blob_client.upload_blob(f, overwrite=True)
-                    count += 1
-                    
-        add_to_logbook("Rozpakowanie tło", filename, f"Pomyślnie rozpakowano {count} plików z tła")
-        print(f"Background unpack finished for {filename}: {count} files.")
-        
-        blob_client.delete_blob()
-        add_to_logbook("Usunięcie ZIP", filename, "Usunięto plik ZIP po rozpakowaniu (zostawiono samą jego zawartość)")
+    claims = principal.get("claims", [])
+    claim_map = {c.get("typ"): c.get("val") for c in claims if "typ" in c and "val" in c}
 
-    except Exception as e:
-        print(f"Background unpack error for {filename}: {e}")
-        add_to_logbook("Błąd Rozpakowania tło", filename, str(e))
+    name = (
+        claim_map.get("name") or
+        (
+            (claim_map.get("given_name") and claim_map.get("family_name")) and
+            f"{claim_map.get('given_name')} {claim_map.get('family_name')}"
+        ) or
+        claim_map.get("preferred_username") or
+        claim_map.get("nickname") or
+        principal.get("name") or
+        principal.get("userDetails") or
+        "anonymous"
+    )
+
+    email = (
+        claim_map.get("email") or
+        claim_map.get("emails") or
+        principal.get("userDetails")
+    )
+
+    provider = principal.get("identityProvider")
+
+    return {"name": name, "email": email, "provider": provider}
 
 @app.route('/')
 def index():
@@ -192,76 +100,15 @@ def favicon():
 def test():
     return "To jest test metody GET"
 
-@app.route('/login')
-def login():
-    session["state"] = str(uuid.uuid4())
-    # Technically we could put a link here, but usually /login redirects to MS directly
-    # OR we render a login page with a button that goes to /login_redirect
-    # Let's keep /login as the rendering page for the button,
-    # and add a new route /signin for the actual redirect.
-    return render_template('login.html')
-
-@app.route('/signin')
-def signin():
-    session["state"] = str(uuid.uuid4())
-    auth_url = _build_msal_app().get_authorization_request_url(
-        SCOPE,
-        state=session["state"],
-        redirect_uri=url_for("authorized", _external=True))
-    return redirect(auth_url)
-
-@app.route(REDIRECT_PATH)  # Its absolute path must match your app's redirect_uri set in AAD
-def authorized():
-    if request.args.get('state') != session.get("state"):
-        return redirect(url_for("index"))
-    if "error" in request.args:  # Authentication/Authorization failure
-        return render_template("auth_error.html", result=request.args)
-    
-    if "code" in request.args:
-        cache = _get_token_from_cache()
-        result = _build_msal_app(cache=cache).acquire_token_by_authorization_code(
-            request.args['code'],
-            scopes=SCOPE,
-            redirect_uri=url_for("authorized", _external=True))
-        if "error" in result:
-             return render_template("auth_error.html", result=result)
-        
-        session["user"] = result.get("id_token_claims")
-        _save_cache(cache)
-        
-        # Log the user in via Flask-Login
-        user_claims = session["user"]
-        # Use preferred_username (email) or oid as ID.
-        user_id = user_claims.get("preferred_username") or user_claims.get("oid")
-        
-        # Check admin status
-        is_admin = get_admin_status_from_table(user_id)
-        session['is_admin'] = is_admin # Store in session for load_user
-        
-        user = User(user_id, is_admin)
-        login_user(user)
-        
-        flash('Zalogowano pomyślnie przez Microsoft!', 'success')
-        return redirect(url_for("index"))
-    
-    return redirect(url_for("index"))
-
 @app.route('/logout')
 def logout():
-    logout_user()
-    session.clear()  # Wipe out user and its token cache from session
-    
-    # Also logout from Microsoft
-    return redirect(  # Supplement your own Logout URL here
-        AUTHORITY + "/oauth2/v2.0/logout" +
-        "?post_logout_redirect_uri=" + url_for("index", _external=True))
+    return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
 
 
 
 
 
 @app.route('/upload', methods=['POST'])
-@login_required
 def upload():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -299,14 +146,7 @@ def upload():
         add_to_logbook("Upload", file.filename, "Pomyślnie wgrano plik do chmury")
 
         print(f"Plik {file.filename} przesłany do Azure Blob Storage")
-        
-        if file.filename.lower().endswith('.zip'):
-            thread = threading.Thread(target=background_unpack, args=(user_id, file.filename))
-            thread.start()
-            flash(f"Plik {file.filename} przesłany. Rozpakowywanie w tle rozpoczęte.", "info")
-        else:
-            flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
-            
+        flash(f"Plik {file.filename} został przesłany pomyślnie!", "success")
         return redirect(url_for('files'))
 
     except Exception as e:
@@ -318,7 +158,6 @@ def upload():
 
 
 @app.route('/files')
-@login_required
 def files():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -361,8 +200,7 @@ def files():
         return "Wystąpił błąd podczas pobierania listy plików."
 
 
-@app.route('/download/<path:filename>')
-@login_required
+@app.route('/download/<filename>')
 def download(filename):
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -387,7 +225,6 @@ def download(filename):
         return "Wystąpił błąd podczas pobierania pliku."
 
 @app.route('/delete', methods=['POST'])
-@login_required
 def delete_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -409,12 +246,13 @@ def delete_file():
         blob_client.delete_blob()
         add_to_logbook("Usunięcie", filename, "Usunięto plik z chmury")
         
+        # Try to delete associated description
         try:
             desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
             desc_blob_client = container_client.get_blob_client(desc_blob_name)
             desc_blob_client.delete_blob()
         except:
-            pass
+            pass # Ignore if description doesn't exist
 
         flash(f"Plik {filename} został usunięty.", "success")
     except Exception as e:
@@ -424,7 +262,6 @@ def delete_file():
     return redirect(url_for('files'))
 
 @app.route('/delete_multiple', methods=['POST'])
-@login_required
 def delete_multiple():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -449,6 +286,7 @@ def delete_multiple():
                 blob_client = container_client.get_blob_client(blob_name)
                 blob_client.delete_blob()
                 
+                # Try to delete associated description
                 try:
                     desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
                     desc_blob_client = container_client.get_blob_client(desc_blob_name)
@@ -473,7 +311,6 @@ def delete_multiple():
     return redirect(url_for('files'))
 
 @app.route('/unpack', methods=['POST'])
-@login_required
 def unpack_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -516,7 +353,6 @@ def unpack_file():
     return redirect(url_for('files'))
 
 @app.route('/describe', methods=['POST'])
-@login_required
 def describe_file():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -565,6 +401,7 @@ def describe_file():
         description = chat_completion.choices[0].message.content
         
         add_to_logbook("AI Opis", filename, "Wygenerowano opis przy użyciu Groq/Llama")
+        # Save description to subfolder
         try:
             desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
             desc_blob_client = container_client.get_blob_client(desc_blob_name)
@@ -572,8 +409,12 @@ def describe_file():
             print(f"Zapisano opis dla {filename}")
         except Exception as upload_e:
             print(f"Błąd zapisu opisu: {upload_e}")
-            
-        flash(description, "description_result")
+            # Non-critical error, continue to show it to user
+        
+        # We need to pass this description back to the template.
+        # Since we redirect, we use flash, but distinct category or special handling in template?
+        # Let's use a special flash category 'description'.
+        flash(description, "description_result") # Use specific category for modal popup in UI
         
     except Exception as e:
         print(f"Błąd generowania opisu: {e}")
@@ -582,7 +423,6 @@ def describe_file():
     return redirect(url_for('files'))
 
 @app.route('/view_description', methods=['POST'])
-@login_required
 def view_description():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -595,6 +435,7 @@ def view_description():
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
         user_id = get_user_id()
+        # Note: Description filenames have .txt appended
         desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
         
         blob_client = container_client.get_blob_client(desc_blob_name)
@@ -611,11 +452,7 @@ def view_description():
 
 
 @app.route('/logbook')
-@login_required
 def logbook_view():
-    if not current_user.is_admin:
-        flash("Brak uprawnień do przeglądania logbooka.", "danger")
-        return redirect(url_for('index'))
     entries = get_logbook_entries()
     return render_template('logbook.html', entries=entries)
 

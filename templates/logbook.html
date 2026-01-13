@@ -1,14 +1,11 @@
 <!doctype html>
 <html lang="pl">
-
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Historia Operacji</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 </head>
-
 <body>
     <div class="container mt-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -37,15 +34,15 @@
                                 <td class="text-nowrap">{{ entry.timestamp }}</td>
                                 <td>
                                     {% if entry.action == 'Upload' %}
-                                    <span class="badge bg-success">Wgranie</span>
+                                        <span class="badge bg-success">Wgranie</span>
                                     {% elif entry.action == 'Wersjonowanie' %}
-                                    <span class="badge bg-warning text-dark">Nowa Wersja</span>
+                                        <span class="badge bg-warning text-dark">Nowa Wersja</span>
                                     {% elif entry.action == 'Usunięcie' %}
-                                    <span class="badge bg-danger">Usunięcie</span>
+                                        <span class="badge bg-danger">Usunięcie</span>
                                     {% elif 'AI' in entry.action %}
-                                    <span class="badge bg-info text-dark">AI</span>
+                                        <span class="badge bg-info text-dark">AI</span>
                                     {% else %}
-                                    <span class="badge bg-secondary">{{ entry.action }}</span>
+                                        <span class="badge bg-secondary">{{ entry.action }}</span>
                                     {% endif %}
                                 </td>
                                 <td class="fw-bold">{{ entry.filename }}</td>
@@ -64,5 +61,4 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-
 </html>

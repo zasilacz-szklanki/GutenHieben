@@ -1,32 +1,21 @@
 <!doctype html>
-
 <head>
-  <title>GutCloud</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
-  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <title>GutCloud</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
 <html>
-
-<body>
-  <main>
-    <div class="px-4 py-3 my-2 text-center">
-      <img class="d-block mx-auto mb-4" src="{{ url_for('static', filename='images/black_cloud_logo.svg') }}" alt="Logo"
-        width="192" height="192" />
-      <h1 class="display-6 fw-bold">GutCloud</h1>
-      {% if current_user.is_authenticated %}
-      <h1 class="display-6 fw-bold">Cześć, {{name}}</h1>
-      <p class="fs-5">
-        Dobrze Cię widzieć
-      </p>
-      <a href="{{ url_for('logout') }}" class="btn btn-primary btn-lg px-4 gap-3">Wyloguj się</a>
-      <a href="{{ url_for('files') }}" class="btn btn-primary btn-lg px-4 gap-3">Twoje pliki</a>
-      {% else %}
-      <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg px-4 gap-3">Zaloguj się</a>
-      <a href="{{ url_for('register') }}" class="btn btn-secondary btn-lg px-4 gap-3">Załóż konto</a>
-      {% endif %}
-    </div>
-  </main>
-</body>
-
+   <body>
+     <main>
+        <div class="px-4 py-3 my-2 text-center">
+            <img class="d-block mx-auto mb-4" src="{{ url_for('static', filename='images/black_cloud_logo.svg') }}" alt="Logo" width="192" height="192"/>
+            <h1 class="display-6 fw-bold">Cześć, {{name}}</h1>
+            <p class="fs-5">
+                Dobrze Cię widzieć
+            </p>
+            <a href="{{ url_for('logout') }}" class="btn btn-primary btn-lg px-4 gap-3">Wyloguj się</a>
+            <a href="{{ url_for('files') }}" class="btn btn-primary btn-lg px-4 gap-3">Twojej pliki</a>
+          </div>
+     </main>  
+   </body>
 </html>
