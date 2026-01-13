@@ -115,6 +115,38 @@ def get_user_info():
         return {"name": current_user.id}
     return {"name": "anonymous"}
 
+def background_unpack(user_id, filename):
+    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    CONTAINER_NAME = "files"
+
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        prefix = f"{user_id}/"
+        blob_name = prefix + filename
+        
+        blob_client = container_client.get_blob_client(blob_name)
+        download_stream = blob_client.download_blob()
+        
+        file_content = io.BytesIO(download_stream.readall())
+        
+        count = 0
+        with zipfile.ZipFile(file_content) as z:
+            for inner_filename in z.namelist():
+                if not inner_filename.endswith('/'):
+                    target_blob_name = f"{user_id}/{inner_filename}"
+                    target_blob_client = container_client.get_blob_client(target_blob_name)
+                    with z.open(inner_filename) as f:
+                        target_blob_client.upload_blob(f, overwrite=True)
+                    count += 1
+                    
+        add_to_logbook("Rozpakowanie tło", filename, f"Pomyślnie rozpakowano {count} plików z tła")
+        print(f"Background unpack finished for {filename}: {count} files.")
+
+    except Exception as e:
+        print(f"Background unpack error for {filename}: {e}")
+        add_to_logbook("Błąd Rozpakowania tło", filename, str(e))
+
 @app.route('/')
 def index():
    print('Request for index page received')
