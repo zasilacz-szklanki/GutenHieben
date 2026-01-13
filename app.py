@@ -66,7 +66,8 @@ def add_to_logbook(action, filename, details="", user_id=None):
 
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
-    blob_name = f"{user_id}/logbook.json"
+    # Zmieniona ścieżka: logs/{user_id}.json
+    blob_name = f"logs/{user_id}.json"
     
     logs = []
     
@@ -109,7 +110,8 @@ def get_logbook_entries():
         user_id = get_user_id()
         AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         CONTAINER_NAME = "files"
-        blob_name = f"{user_id}/logbook.json"
+        # Zmieniona ścieżka: logs/{user_id}.json
+        blob_name = f"logs/{user_id}.json"
         
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
@@ -264,8 +266,6 @@ def files():
             blob_relative_name = blob.name[len(prefix):]
             if blob_relative_name.startswith('descriptions/'):
                 description_files.add(blob_relative_name[len('descriptions/'):])
-            elif blob_relative_name == "logbook.json":
-                continue # Skip showing logbook file in file list
             else:
                 user_files.append(blob)
 
