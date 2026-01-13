@@ -104,10 +104,6 @@ def test():
 def logout():
     return redirect("https://gutenhieben-b5b0a0hxfqgnczdh.polandcentral-01.azurewebsites.net/.auth/logout")
 
-
-
-
-
 @app.route('/upload', methods=['POST'])
 def upload():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
@@ -155,8 +151,6 @@ def upload():
         flash("Wystąpił błąd podczas przesyłania pliku.", "danger")
         return redirect(url_for('index'))
 
-
-
 @app.route('/files')
 def files():
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
@@ -199,8 +193,7 @@ def files():
         print(f"Błąd pobierania listy plików: {e}")
         return "Wystąpił błąd podczas pobierania listy plików."
 
-
-@app.route('/download/<filename>')
+@app.route('/download/<path:filename>')
 def download(filename):
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
@@ -246,13 +239,12 @@ def delete_file():
         blob_client.delete_blob()
         add_to_logbook("Usunięcie", filename, "Usunięto plik z chmury")
         
-        # Try to delete associated description
         try:
             desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
             desc_blob_client = container_client.get_blob_client(desc_blob_name)
             desc_blob_client.delete_blob()
         except:
-            pass # Ignore if description doesn't exist
+            pass
 
         flash(f"Plik {filename} został usunięty.", "success")
     except Exception as e:
@@ -286,7 +278,6 @@ def delete_multiple():
                 blob_client = container_client.get_blob_client(blob_name)
                 blob_client.delete_blob()
                 
-                # Try to delete associated description
                 try:
                     desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
                     desc_blob_client = container_client.get_blob_client(desc_blob_name)
@@ -435,7 +426,6 @@ def view_description():
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
         container_client = blob_service_client.get_container_client(CONTAINER_NAME)
         user_id = get_user_id()
-        # Note: Description filenames have .txt appended
         desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
         
         blob_client = container_client.get_blob_client(desc_blob_name)
@@ -449,7 +439,6 @@ def view_description():
         flash(f"Nie udało się pobrać opisu: {e}", "danger")
 
     return redirect(url_for('files'))
-
 
 @app.route('/logbook')
 def logbook_view():
