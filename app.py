@@ -191,7 +191,7 @@ def files():
         return render_template('files.html', files=files)
     except Exception as e:
         print(f"Błąd pobierania listy plików: {e}")
-        return "Wystąpił błąd podczas pobierania listy plików."
+        return f"Wystąpił błąd podczas pobierania listy plików. {e}"
 
 @app.route('/download/<path:filename>')
 def download(filename):
