@@ -5,20 +5,32 @@ import zipfile
 import groq
 import threading
 import io
+import uuid
 from datetime import datetime
 from azure.storage.blob import BlobServiceClient
 from azure.data.tables import TableServiceClient, UpdateMode
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, Response
+import msal
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, Response, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask_session import Session  # Requires pip install Flask-Session
 
 app = Flask(__name__)
+app.config["SESSION_TYPE"] = "filesystem"  # Using server-side session
+Session(app)
+
 LOG_FILE = 'logbook.json'
 TABLE_NAME = 'users'
-ADMIN_SECRET = 'Cloud2025'
 
-app.secret_key = "DTS"
+# MSAL Configuration
+CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+# Authority: https://login.microsoftonline.com/common (for multi-tenant) or /<tenant_id> (for single tenant)
+AUTHORITY = os.getenv("AUTHORITY", "https://login.microsoftonline.com/common")
+REDIRECT_PATH = "/getAToken"
+SCOPE = ["User.Read"]
+
+app.secret_key = "DTS" # Keep specific key or use os.urandom in production
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -41,37 +53,38 @@ def get_table_client():
 
 @login_manager.user_loader
 def load_user(user_id):
+    # In a real app, you might want to check the user in your DB.
+    # Here we just reconstitute the user from the ID, and check session for admin status if needed.
+    is_admin = session.get('is_admin', False)
+    return User(user_id, is_admin)
+
+def _build_msal_app(cache=None, authority=None):
+    return msal.ConfidentialClientApplication(
+        CLIENT_ID, authority=authority or AUTHORITY,
+        client_credential=CLIENT_SECRET, token_cache=cache)
+
+def _get_token_from_cache(scope=None):
+    cache = msal.SerializableTokenCache()
+    if session.get("token_cache"):
+        cache.deserialize(session["token_cache"])
+    return cache
+
+def _save_cache(cache):
+    if cache.has_state_changed:
+        session["token_cache"] = cache.serialize()
+
+def get_admin_status_from_table(email):
+    """Checks if the email exists in the users table and has is_admin=True"""
     try:
         table_client = get_table_client()
-        user_entity = table_client.get_entity(partition_key="users", row_key=user_id)
-        return User(user_id, user_entity.get('is_admin', False))
+        # RowKey is username/email
+        user_entity = table_client.get_entity(partition_key="users", row_key=email)
+        return user_entity.get('is_admin', False)
     except ResourceNotFoundError:
-        return None
+        return False
     except Exception as e:
-        print(f"Błąd ładowania użytkownika: {e}")
-        return None
-
-def authenticate_user(username, password):
-    try:
-        table_client = get_table_client()
-        user_entity = table_client.get_entity(partition_key="users", row_key=username)
-        if check_password_hash(user_entity['password'], password):
-            return User(username, user_entity.get('is_admin', False))
-    except ResourceNotFoundError:
-        return None
-    except Exception as e:
-        print(f"Bład autentykacji: {e}")
-    return None
-
-def create_user(username, password, is_admin=False):
-    table_client = get_table_client()
-    user_entity = {
-        'PartitionKey': "users",
-        'RowKey': username,
-        'password': generate_password_hash(password),
-        'is_admin': is_admin
-    }
-    table_client.create_entity(entity=user_entity)
+        print(f"Error checking admin status: {e}")
+        return False
 
 def add_to_logbook(action, filename, details=""):
     """Dodaje wpis do logbooka."""
@@ -179,63 +192,69 @@ def favicon():
 def test():
     return "To jest test metody GET"
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login')
 def login():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        user = authenticate_user(username, password)
-        
-        if user:
-            login_user(user)
-            flash('Zalogowano pomyślnie!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Nieprawidłowa nazwa użytkownika lub hasło.', 'danger')
-    
+    session["state"] = str(uuid.uuid4())
+    # Technically we could put a link here, but usually /login redirects to MS directly
+    # OR we render a login page with a button that goes to /login_redirect
+    # Let's keep /login as the rendering page for the button,
+    # and add a new route /signin for the actual redirect.
     return render_template('login.html')
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        is_admin = request.form.get('is_admin') == '1'
-        admin_code = request.form.get('admin_code')
-        
-        try:
-            table_client = get_table_client()
-            table_client.get_entity(partition_key="users", row_key=username)
-            flash('Użytkownik o takiej nazwie już istnieje.', 'warning')
-            return redirect(url_for('register'))
-        except ResourceNotFoundError:
-            pass
-        except Exception as e:
-            flash(f"Błąd bazy danych: {e}", "danger")
-            return redirect(url_for('register'))
+@app.route('/signin')
+def signin():
+    session["state"] = str(uuid.uuid4())
+    auth_url = _build_msal_app().get_authorization_request_url(
+        SCOPE,
+        state=session["state"],
+        redirect_uri=url_for("authorized", _external=True))
+    return redirect(auth_url)
 
-            
-        if is_admin and admin_code != ADMIN_SECRET:
-             flash('Nieprawidłowy kod administratora.', 'danger')
-             return redirect(url_for('register'))
+@app.route(REDIRECT_PATH)  # Its absolute path must match your app's redirect_uri set in AAD
+def authorized():
+    if request.args.get('state') != session.get("state"):
+        return redirect(url_for("index"))
+    if "error" in request.args:  # Authentication/Authorization failure
+        return render_template("auth_error.html", result=request.args)
+    
+    if "code" in request.args:
+        cache = _get_token_from_cache()
+        result = _build_msal_app(cache=cache).acquire_token_by_authorization_code(
+            request.args['code'],
+            scopes=SCOPE,
+            redirect_uri=url_for("authorized", _external=True))
+        if "error" in result:
+             return render_template("auth_error.html", result=result)
         
-        try:
-            create_user(username, password, is_admin)
-            flash('Konto utworzone pomyślnie! Możesz się zalogować.', 'success')
-            return redirect(url_for('login'))
-        except Exception as e:
-             flash(f'Błąd podczas tworzenia konta: {e}', 'danger')
-             return redirect(url_for('register'))
+        session["user"] = result.get("id_token_claims")
+        _save_cache(cache)
         
-    return render_template('register.html')
+        # Log the user in via Flask-Login
+        user_claims = session["user"]
+        # Use preferred_username (email) or oid as ID.
+        user_id = user_claims.get("preferred_username") or user_claims.get("oid")
+        
+        # Check admin status
+        is_admin = get_admin_status_from_table(user_id)
+        session['is_admin'] = is_admin # Store in session for load_user
+        
+        user = User(user_id, is_admin)
+        login_user(user)
+        
+        flash('Zalogowano pomyślnie przez Microsoft!', 'success')
+        return redirect(url_for("index"))
+    
+    return redirect(url_for("index"))
 
 @app.route('/logout')
-@login_required
 def logout():
     logout_user()
-    flash('Wylogowano pomyślnie.', 'info')
-    return redirect(url_for('index'))
+    session.clear()  # Wipe out user and its token cache from session
+    
+    # Also logout from Microsoft
+    return redirect(  # Supplement your own Logout URL here
+        AUTHORITY + "/oauth2/v2.0/logout" +
+        "?post_logout_redirect_uri=" + url_for("index", _external=True))
 
 
 

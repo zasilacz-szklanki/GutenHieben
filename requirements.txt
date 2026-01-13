@@ -4,3 +4,5 @@ azure-storage-blob
 groq
 flask-login
 azure-data-tables
+msal
+Flask-Session

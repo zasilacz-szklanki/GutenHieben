@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-5">
+    <div class="alert alert-danger" role="alert">
+        <h4 class="alert-heading">Błąd autoryzacji!</h4>
+        <p>Wystąpił problem podczas logowania przez Microsoft.</p>
+        <hr>
+        <p class="mb-0">Szczegóły błędu:</p>
+        <pre>{{ result | tojson(indent=4) }}</pre>
+        <a href="{{ url_for('login') }}" class="btn btn-primary mt-3">Spróbuj ponownie</a>
+    </div>
+</div>
+{% endblock %}
