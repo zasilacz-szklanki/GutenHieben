@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - main
+      - TP
   workflow_dispatch:
 
 jobs:
@@ -73,4 +74,5 @@ jobs:
         with:
           app-name: 'gutenhieben'
           slot-name: 'Production'
+
           
