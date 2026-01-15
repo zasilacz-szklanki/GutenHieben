@@ -12,7 +12,6 @@ from flask import (Flask, redirect, render_template, request,
 
 
 app = Flask(__name__)
-# LOG_FILE removed, using Azure Blob instead
 app.secret_key = "DTS" 
 
 def get_user_id():
@@ -56,7 +55,6 @@ def get_user_info():
     return {"name": name, "email": email, "provider": provider}
 
 def add_to_logbook(action, filename, details="", user_id=None):
-    """Dodaje wpis do logbooka użytkownika w Azure Blob Storage."""
     if not user_id:
         try:
             user_id = get_user_id()
@@ -66,7 +64,6 @@ def add_to_logbook(action, filename, details="", user_id=None):
 
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     CONTAINER_NAME = "files"
-    # Zmieniona ścieżka: logs/{user_id}.json
     blob_name = f"logs/{user_id}.json"
     
     logs = []
@@ -105,12 +102,10 @@ def add_to_logbook(action, filename, details="", user_id=None):
         print(f"Błąd zapisu logbooka: {e}")
 
 def get_logbook_entries():
-    """Pobiera wpisy z logbooka użytkownika."""
     try:
         user_id = get_user_id()
         AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         CONTAINER_NAME = "files"
-        # Zmieniona ścieżka: logs/{user_id}.json
         blob_name = f"logs/{user_id}.json"
         
         blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
@@ -447,7 +442,6 @@ def describe_file():
         description = chat_completion.choices[0].message.content
         
         add_to_logbook("AI Opis", filename, "Wygenerowano opis przy użyciu Groq/Llama", user_id=user_id)
-        # Save description to subfolder
         try:
             desc_blob_name = f"{user_id}/descriptions/{filename}.txt"
             desc_blob_client = container_client.get_blob_client(desc_blob_name)
@@ -455,12 +449,7 @@ def describe_file():
             print(f"Zapisano opis dla {filename}")
         except Exception as upload_e:
             print(f"Błąd zapisu opisu: {upload_e}")
-            # Non-critical error, continue to show it to user
-        
-        # We need to pass this description back to the template.
-        # Since we redirect, we use flash, but distinct category or special handling in template?
-        # Let's use a special flash category 'description'.
-        flash(description, "description_result") # Use specific category for modal popup in UI
+        flash(description, "description_result")
         
     except Exception as e:
         print(f"Błąd generowania opisu: {e}")
